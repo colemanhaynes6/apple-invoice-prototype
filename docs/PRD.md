@@ -3,13 +3,16 @@
 
 ## 1. Overview
 
-An internal accounts payable tool for the Apple Music Publishing Operations team. Licensors (music rights holders) send Apple invoices for licensing fees owed across one or more territories and Apple Music service plans. This tool lets ops team members upload/create invoices, track what's owed, and process payments — fully or partially by territory/plan — with a full audit trail per invoice.
-
-**This is accounts payable**: Apple is the payer, licensors are the payees.
+An internal accounts payable tool for the Apple Music Publishing Operations team. Licensors (music rights holders) send Apple invoices for licensing fees owed across one or more territories and Apple Music service plans. This tool lets ops team members upload/create invoices, and track + process payments (fully or partially by territory/plan with a full audit trail per invoice.)
 
 ## 2. Goals
 
-- Give ops team members a single system of record for licensor invoices and payment status.
+Design a UI prototype for an internal invoice and payment management tool used by the Apple Music Publishing Operations team. Your prototype should cover:
+- Creating and viewing invoices (with territory and plan details)
+- Recording full or partial payments against an invoice
+- Tracking outstanding balances and payment history per invoice.
+
+Complimentary functionality:
 - Support partial payment at the territory/plan line-item level (e.g., pay the US/Individual line now, hold France/Family for later).
 - Make payment history and invoice status transparent and auditable at a glance.
 - Support paying multiple invoices/line items in a single batch action.
@@ -81,6 +84,13 @@ An internal accounts payable tool for the Apple Music Publishing Operations team
 - Outstanding balance: total − sum(payments), shown prominently.
 - Actions: "Pay this invoice" (jumps into the batch payment flow pre-filtered to this invoice's unpaid lines), "Mark as Blocked" (manual toggle with a required reason note).
 
+### 4.4 Licensor View
+- Entry point: licensor names are clickable everywhere they appear (Invoice Browser, Invoice Detail, Payments queue) and route to a dedicated Licensor Detail view.
+- Invoice history: shows every invoice on file for that licensor (invoice #, date, due date, total, outstanding, status), each row linking into that invoice's own detail page.
+- Outstanding rollup: total outstanding balance across all of the licensor's invoices, grouped by currency (a licensor could in principle bill in more than one).
+- Licensor record: surfaces point of contact and a contract reference for that licensor.
+- Contract reference is a stub, not a document link.
+
 ## 5. Status Logic
 
 Invoice status is computed from its line items, except Blocked which is a manual override that takes precedence:
@@ -97,15 +107,3 @@ Invoice status is computed from its line items, except Blocked which is a manual
 - "Blocked" is manual only in this version — no automated block rules (e.g., missing tax docs) yet, though the field is structured to support that later.
 - Currency conversion/FX is out of scope — invoices are tracked in their original currency as submitted.
 - No approval workflow (e.g., multi-step sign-off before payment) — single ops user can create and pay invoices. Noted as a likely real-world gap, called out in rationale.
-
-## 7. Visual Design Direction
-
-Apple internal tooling aesthetic: light background, generous whitespace, SF Pro (or system default sans-serif as a stand-in), minimal chrome, data presented in clean tables with subtle borders rather than heavy grid lines, understated status badges (muted color fills, not saturated red/green alarm colors), left-nav or top-nav simple wayfinding between screens.
-
-## 8. Out of Scope (this exercise)
-
-- Real authentication/permissions
-- FX conversion
-- Multi-step approval workflows
-- Automated invoice ingestion from licensor systems
-- Notifications/reminders for upcoming due dates
