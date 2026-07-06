@@ -137,6 +137,9 @@
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
   .toolbar select, .toolbar input:not(.checkbox){width:auto;min-width:140px;}
   .toolbar .search{flex:1;min-width:200px;}
+  .date-range{display:flex;align-items:center;gap:6px;}
+  .date-range input{min-width:0;width:150px;}
+  .date-range-sep{color:var(--text-secondary);font-size:12px;}
 
   /* Multi-select filter dropdown */
   .ms-dropdown{position:relative;}
@@ -260,7 +263,7 @@ const PROCESSORS = ["Coleman Haynes", "David Ewell", "Pramit Bagui", "Abe Mirras
 const state = {
   view: "browser",
   selectedInvoiceId: null,
-  browser: { statusFilter:[], licensorFilter:[], search:"", openMenu:null },
+  browser: { statusFilter:[], licensorFilter:[], search:"", dateFrom:"", dateTo:"", openMenu:null },
   paymentsQueue: { selected:new Set(), expanded:new Set() },
   toast: null,
   confirmModal: null,
@@ -411,6 +414,8 @@ function renderBrowser(){
   const filtered = invoices.filter(inv=>{
     if(f.statusFilter.length && !f.statusFilter.includes(invoiceStatus(inv))) return false;
     if(f.licensorFilter.length && !f.licensorFilter.includes(inv.licensor)) return false;
+    if(f.dateFrom && inv.invoiceDate < f.dateFrom) return false;
+    if(f.dateTo && inv.invoiceDate > f.dateTo) return false;
     if(f.search){
       const s = f.search.toLowerCase();
       if(!inv.invoiceNumber.toLowerCase().includes(s) && !inv.licensor.toLowerCase().includes(s)) return false;
@@ -444,6 +449,11 @@ function renderBrowser(){
           oninput="state.browser.search=this.value; render()">
         ${renderMultiSelect("statusFilter", "All statuses", STATUSES)}
         ${renderMultiSelect("licensorFilter", "All licensors", licensors, true)}
+        <div class="date-range">
+          <input type="date" value="${f.dateFrom}" onchange="state.browser.dateFrom=this.value; render()" aria-label="Invoice date from">
+          <span class="date-range-sep">&ndash;</span>
+          <input type="date" value="${f.dateTo}" onchange="state.browser.dateTo=this.value; render()" aria-label="Invoice date to">
+        </div>
       </div>
       <div class="table-scroll">
         <table>
