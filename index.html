@@ -94,13 +94,25 @@
   label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:5px;}
   input[type=text],input[type=number],input[type=date],select,textarea{
     width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;
+    height:33px;box-sizing:border-box;
     font-size:13px;color:var(--text-primary);background:#fff;font-family:inherit;
+  }
+  select{
+    appearance:none;-webkit-appearance:none;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%236e6e73' d='M4 6l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 8px center;
+    padding-right:26px;
+  }
+  input[disabled],select[disabled],textarea[disabled]{
+    background:var(--neutral-bg);color:var(--text-secondary);cursor:not-allowed;
   }
   .field{margin-bottom:14px;}
   .field-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
   .field-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
 
   /* Tables */
+  .table-scroll{overflow-x:auto;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th{
     text-align:left;font-size:11px;font-weight:600;color:var(--text-secondary);
@@ -127,6 +139,25 @@
   .toolbar .search{flex:1;min-width:200px;}
 
   .empty{text-align:center;color:var(--text-secondary);font-size:13px;padding:40px 0;}
+
+  /* Payments accordion */
+  .invoice-group{border:1px solid var(--border-light);border-radius:8px;margin-bottom:10px;overflow:hidden;}
+  .invoice-group-header{
+    display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;background:var(--surface);
+  }
+  .invoice-group-header:hover{background:var(--neutral-bg);}
+  .invoice-group-header .chevron{
+    display:inline-block;font-size:10px;color:var(--text-secondary);
+    transition:transform .15s ease;flex:0 0 auto;
+  }
+  .invoice-group-header .chevron.open{transform:rotate(90deg);}
+  .ig-licensor{flex:1;min-width:0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ig-invnum{flex:0 0 100px;font-size:12.5px;color:var(--text-secondary);}
+  .ig-count{flex:0 0 64px;font-size:12px;color:var(--text-secondary);}
+  .ig-due{flex:0 0 120px;font-size:12px;color:var(--text-secondary);}
+  .ig-amount{flex:0 0 100px;text-align:right;font-size:13px;font-weight:600;}
+  .invoice-group-body{border-top:1px solid var(--border-light);background:var(--bg);padding:2px 14px 6px 40px;}
+  .invoice-group-body table{background:transparent;}
 
   /* Detail view */
   .back-link{font-size:13px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-bottom:16px;background:none;border:none;padding:0;}
@@ -201,7 +232,7 @@ const state = {
   view: "browser",
   selectedInvoiceId: null,
   browser: { status:"all", licensor:"all", search:"" },
-  paymentsQueue: { licensor:"all", territory:"all", plan:"all", selected:new Set() },
+  paymentsQueue: { selected:new Set(), expanded:new Set() },
   toast: null,
   confirmModal: null,
 };
@@ -346,13 +377,15 @@ function renderBrowser(){
           ${licensorOptions}
         </select>
       </div>
-      <table>
-        <thead><tr>
-          <th>Invoice #</th><th>Licensor</th><th>Invoice Date</th><th>Due Date</th>
-          <th>Total</th><th>Outstanding</th><th>Status</th>
-        </tr></thead>
-        <tbody>${rows || `<tr><td colspan="7"><div class="empty">No invoices match these filters.</div></td></tr>`}</tbody>
-      </table>
+      <div class="table-scroll">
+        <table>
+          <thead><tr>
+            <th>Invoice #</th><th>Licensor</th><th>Invoice Date</th><th>Due Date</th>
+            <th>Total</th><th>Outstanding</th><th>Status</th>
+          </tr></thead>
+          <tbody>${rows || `<tr><td colspan="7"><div class="empty">No invoices match these filters.</div></td></tr>`}</tbody>
+        </table>
+      </div>
     </div>
   `;
 }
@@ -416,19 +449,23 @@ function renderDetail(){
 
         <div class="card">
           <h3>Line items</h3>
-          <table>
-            <thead><tr><th>Territory</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead>
-            <tbody>${lineRows}</tbody>
-          </table>
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Territory</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead>
+              <tbody>${lineRows}</tbody>
+            </table>
+          </div>
         </div>
 
         <div class="card">
           <h3>Payment history</h3>
           ${history.length ? `
-          <table>
-            <thead><tr><th>Date</th><th>Amount</th><th>Line item paid</th><th>Processor</th><th>Batch</th></tr></thead>
-            <tbody>${historyRows}</tbody>
-          </table>` : `<div class="empty">No payments recorded yet.</div>`}
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Date</th><th>Amount</th><th>Line item paid</th><th>Processor</th><th>Batch</th></tr></thead>
+              <tbody>${historyRows}</tbody>
+            </table>
+          </div>` : `<div class="empty">No payments recorded yet.</div>`}
         </div>
       </div>
 
@@ -471,12 +508,10 @@ function toggleBlock(id, blocked){
 
 function payThisInvoice(id){
   state.view = "payments";
-  state.paymentsQueue.licensor = "all";
-  state.paymentsQueue.territory = "all";
-  state.paymentsQueue.plan = "all";
   state.paymentsQueue.selected = new Set(
     invoices.find(i=>i.id===id).lineItems.filter(li=>!li.paid).map(li=>li.id)
   );
+  state.paymentsQueue.expanded = new Set([id]);
   state.paymentsQueue.focusInvoiceId = id;
   render();
 }
@@ -486,44 +521,54 @@ function payThisInvoice(id){
 --------------------------------------------------------------- */
 function renderPayments(){
   const f = state.paymentsQueue;
-  // gather all unpaid, unblocked line items with parent invoice info
-  let rows = [];
-  invoices.forEach(inv=>{
-    if(inv.blocked) return;
-    inv.lineItems.forEach(li=>{
-      if(li.paid) return;
-      if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
-      rows.push({inv, li});
-    });
-  });
-  rows = rows.filter(r=>{
-    if(f.licensor!=="all" && r.inv.licensor!==f.licensor) return false;
-    if(f.territory!=="all" && r.li.territory!==f.territory) return false;
-    if(f.plan!=="all" && r.li.plan!==f.plan) return false;
-    return true;
-  });
+  // gather all invoices with outstanding, unblocked line items
+  let groups = invoices
+    .filter(inv=>!inv.blocked)
+    .filter(inv=>!f.focusInvoiceId || inv.id===f.focusInvoiceId)
+    .map(inv=>({inv, unpaid: inv.lineItems.filter(li=>!li.paid)}))
+    .filter(g=>g.unpaid.length>0);
 
-  const territories = [...new Set(invoices.flatMap(i=>i.lineItems.map(l=>l.territory)))].sort();
-  const plans = [...new Set(invoices.flatMap(i=>i.lineItems.map(l=>l.plan)))].sort();
+  const groupHtml = groups.map(({inv,unpaid})=>{
+    const selectedCount = unpaid.filter(li=>f.selected.has(li.id)).length;
+    const selState = selectedCount===0 ? "empty" : selectedCount===unpaid.length ? "full" : "partial";
+    const subtotal = unpaid.reduce((s,li)=>s+li.amount,0);
+    const expanded = f.expanded.has(inv.id);
+    const lineRows = unpaid.map(li=>`
+      <tr>
+        <td><input type="checkbox" class="checkbox" ${f.selected.has(li.id)?"checked":""} onchange="toggleLine('${li.id}')"></td>
+        <td>${esc(li.territory)}</td>
+        <td>${esc(li.plan)}</td>
+        <td>${fmtMoney(li.amount, inv.currency)}</td>
+      </tr>`).join("");
 
-  const tableRows = rows.map(({inv,li})=>{
-    const checked = f.selected.has(li.id);
-    return `<tr>
-      <td><input type="checkbox" class="checkbox" ${checked?"checked":""} onchange="toggleLine('${li.id}')"></td>
-      <td>${esc(inv.licensor)}</td>
-      <td class="mono">${esc(inv.invoiceNumber)}</td>
-      <td>${esc(li.territory)}</td>
-      <td>${esc(li.plan)}</td>
-      <td>${fmtMoney(li.amount, inv.currency)}</td>
-      <td>${dueDate(inv.invoiceDate, inv.terms)}</td>
-    </tr>`;
+    return `
+      <div class="invoice-group">
+        <div class="invoice-group-header" onclick="toggleExpand('${inv.id}')">
+          <input type="checkbox" class="checkbox invoice-check" data-state="${selState}"
+            onclick="event.stopPropagation()" onchange="toggleInvoiceLines('${inv.id}')">
+          <span class="chevron ${expanded?'open':''}">&#9656;</span>
+          <span class="ig-licensor">${esc(inv.licensor)}</span>
+          <span class="ig-invnum mono">${esc(inv.invoiceNumber)}</span>
+          <span class="ig-count">${unpaid.length} line${unpaid.length===1?'':'s'}</span>
+          <span class="ig-due">Due ${dueDate(inv.invoiceDate, inv.terms)}</span>
+          <span class="ig-amount">${fmtMoney(subtotal, inv.currency)}</span>
+        </div>
+        ${expanded ? `
+        <div class="invoice-group-body">
+          <table>
+            <thead><tr><th></th><th>Territory</th><th>Plan</th><th>Amount</th></tr></thead>
+            <tbody>${lineRows}</tbody>
+          </table>
+        </div>` : ''}
+      </div>`;
   }).join("");
 
-  // summary of selected
-  const selectedRows = rows.filter(r=>f.selected.has(r.li.id));
+  // summary of selected across all groups
+  let selectedLines = [];
+  groups.forEach(({inv,unpaid})=> unpaid.forEach(li=>{ if(f.selected.has(li.id)) selectedLines.push({inv,li}); }));
   const byCurrency = {};
-  selectedRows.forEach(r=>{ byCurrency[r.inv.currency] = (byCurrency[r.inv.currency]||0) + r.li.amount; });
-  const invoiceCount = new Set(selectedRows.map(r=>r.inv.id)).size;
+  selectedLines.forEach(({inv,li})=>{ byCurrency[inv.currency] = (byCurrency[inv.currency]||0) + li.amount; });
+  const invoiceCount = new Set(selectedLines.map(s=>s.inv.id)).size;
   const currencySummary = Object.entries(byCurrency).map(([c,a])=>fmtMoney(a,c)).join("  +  ") || "—";
 
   return `
@@ -537,35 +582,20 @@ function renderPayments(){
 
     <div class="card">
       <div class="toolbar">
-        <select onchange="state.paymentsQueue.licensor=this.value; render()">
-          <option value="all">All licensors</option>
-          ${licensors.map(l=>`<option ${f.licensor===l?"selected":""}>${esc(l)}</option>`).join("")}
-        </select>
-        <select onchange="state.paymentsQueue.territory=this.value; render()">
-          <option value="all">All territories</option>
-          ${territories.map(t=>`<option ${f.territory===t?"selected":""}>${esc(t)}</option>`).join("")}
-        </select>
-        <select onchange="state.paymentsQueue.plan=this.value; render()">
-          <option value="all">All plans</option>
-          ${plans.map(p=>`<option ${f.plan===p?"selected":""}>${esc(p)}</option>`).join("")}
-        </select>
+        <button class="btn btn-small" onclick="expandAll()">Expand all</button>
+        <button class="btn btn-small" onclick="state.paymentsQueue.expanded=new Set(); render()">Collapse all</button>
         <button class="btn btn-small" onclick="selectAllVisible()">Select all visible</button>
         <button class="btn btn-small" onclick="state.paymentsQueue.selected=new Set(); render()">Clear selection</button>
       </div>
-      <table>
-        <thead><tr>
-          <th></th><th>Licensor</th><th>Invoice #</th><th>Territory</th><th>Plan</th><th>Amount</th><th>Due date</th>
-        </tr></thead>
-        <tbody>${tableRows || `<tr><td colspan="7"><div class="empty">No outstanding line items match these filters.</div></td></tr>`}</tbody>
-      </table>
+      ${groupHtml || `<div class="empty">No outstanding line items to pay.</div>`}
     </div>
 
     <div class="summary-bar">
       <div class="stats">
-        <strong>${selectedRows.length}</strong> line item${selectedRows.length===1?'':'s'} selected
+        <strong>${selectedLines.length}</strong> line item${selectedLines.length===1?'':'s'} selected
         across <strong>${invoiceCount}</strong> invoice${invoiceCount===1?'':'s'} &nbsp;·&nbsp; ${currencySummary}
       </div>
-      <button class="btn btn-primary" ${selectedRows.length===0?"disabled":""} onclick="openConfirm()">Review &amp; Process Payment</button>
+      <button class="btn btn-primary" ${selectedLines.length===0?"disabled":""} onclick="openConfirm()">Review &amp; Process Payment</button>
     </div>
   `;
 }
@@ -575,16 +605,35 @@ function toggleLine(lineId){
   s.has(lineId) ? s.delete(lineId) : s.add(lineId);
   render();
 }
+function toggleInvoiceLines(invId){
+  const inv = invoices.find(i=>i.id===invId);
+  const unpaid = inv.lineItems.filter(li=>!li.paid);
+  const s = state.paymentsQueue.selected;
+  const allSelected = unpaid.length>0 && unpaid.every(li=>s.has(li.id));
+  unpaid.forEach(li=> allSelected ? s.delete(li.id) : s.add(li.id));
+  render();
+}
+function toggleExpand(invId){
+  const s = state.paymentsQueue.expanded;
+  s.has(invId) ? s.delete(invId) : s.add(invId);
+  render();
+}
+function expandAll(){
+  const f = state.paymentsQueue;
+  invoices.forEach(inv=>{
+    if(inv.blocked) return;
+    if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
+    if(inv.lineItems.some(li=>!li.paid)) f.expanded.add(inv.id);
+  });
+  render();
+}
 function selectAllVisible(){
   const f = state.paymentsQueue;
   invoices.forEach(inv=>{
     if(inv.blocked) return;
     if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
-    if(f.licensor!=="all" && inv.licensor!==f.licensor) return;
     inv.lineItems.forEach(li=>{
       if(li.paid) return;
-      if(f.territory!=="all" && li.territory!==f.territory) return;
-      if(f.plan!=="all" && li.plan!==f.plan) return;
       f.selected.add(li.id);
     });
   });
@@ -829,6 +878,11 @@ function render(){
   else if(state.view==="payments") html = renderPayments();
   else if(state.view==="upload") html = renderUpload();
   document.getElementById("app").innerHTML = html;
+
+  document.querySelectorAll(".invoice-check").forEach(cb=>{
+    cb.checked = cb.dataset.state==="full";
+    cb.indeterminate = cb.dataset.state==="partial";
+  });
 
   const existingModal = document.querySelector(".modal-overlay");
   if(existingModal) existingModal.remove();
