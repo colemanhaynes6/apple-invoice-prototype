@@ -135,6 +135,7 @@
   .pill-partial{background:var(--warning-bg);color:var(--warning-text);}
   .pill-paid{background:var(--success-bg);color:var(--success-text);}
   .pill-blocked{background:var(--danger-bg);color:var(--danger-text);}
+  .pill-pending{background:var(--accent-bg);color:var(--accent);}
 
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
   .toolbar select, .toolbar input:not(.checkbox){width:auto;min-width:140px;}
@@ -271,6 +272,7 @@ const state = {
   toast: null,
   confirmModal: null,
   blockModal: null,
+  approvalModal: null,
 };
 
 const licensors = [
@@ -285,13 +287,14 @@ const licensors = [
 const licensorNames = licensors.map(l=>l.name);
 function findLicensor(name){ return licensors.find(l=>l.name===name); }
 
-function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lines, blocked=false, paidLineIdx=[]}) {
+function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lines, blocked=false, paidLineIdx=[], pendingLineIdx=[], pendingRequestedBy=null, pendingRequestedDate=null}) {
   const lineItems = lines.map((l,i)=>({
     id: nextId(),
     territory: l.territory,
     plan: l.plan,
     amount: l.amount,
     paid: paidLineIdx.includes(i),
+    pendingApproval: pendingLineIdx.includes(i),
   }));
   return {
     id: nextId(),
@@ -300,6 +303,8 @@ function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lin
     blocked,
     createdBy: PROCESSORS[0],
     source: "Manual entry",
+    pendingRequestedBy: pendingLineIdx.length ? pendingRequestedBy : null,
+    pendingRequestedDate: pendingLineIdx.length ? pendingRequestedDate : null,
   };
 }
 
@@ -315,7 +320,8 @@ let invoices = [
   makeInvoice({licensor:"Biscuit the Cat Music Holdings", invoiceNumber:"BCM-4090", invoiceDate:"2026-04-20", terms:"Net 30", currency:"USD",
     lines:[{territory:"US",plan:"Apple One",amount:3400}], blocked:true}),
   makeInvoice({licensor:"Culver City Licensors", invoiceNumber:"CCL-5512", invoiceDate:"2026-05-18", terms:"Net 60", currency:"JPY",
-    lines:[{territory:"JP",plan:"Individual",amount:820000},{territory:"JP",plan:"Family",amount:410000}]}),
+    lines:[{territory:"JP",plan:"Individual",amount:820000},{territory:"JP",plan:"Family",amount:410000}],
+    pendingLineIdx:[0], pendingRequestedBy:"Coleman H.", pendingRequestedDate:"2026-06-03"}),
   makeInvoice({licensor:"Spinal Tap, LLC", invoiceNumber:"ST-1111", invoiceDate:"2026-05-22", terms:"Net 30", currency:"AUD",
     lines:[{territory:"AU",plan:"Individual",amount:6700},{territory:"AU",plan:"Student",amount:1900}], paidLineIdx:[0,1]}),
   makeInvoice({licensor:"Indie Music Publishing", invoiceNumber:"IMP-7788", invoiceDate:"2026-05-25", terms:"Net 30", currency:"USD",
@@ -353,13 +359,14 @@ function invoiceTotal(inv){ return inv.lineItems.reduce((s,li)=>s+li.amount,0); 
 function invoiceOutstanding(inv){ return inv.lineItems.filter(li=>!li.paid).reduce((s,li)=>s+li.amount,0); }
 function invoiceStatus(inv){
   if(inv.blocked) return "Blocked";
+  if(inv.lineItems.some(li=>li.pendingApproval)) return "Payment Approval Pending";
   const paidCount = inv.lineItems.filter(li=>li.paid).length;
   if(paidCount===0) return "Unpaid";
   if(paidCount===inv.lineItems.length) return "Paid";
   return "Partially Paid";
 }
 function pillClass(status){
-  return {Unpaid:"pill-unpaid",  "Partially Paid":"pill-partial", Paid:"pill-paid", Blocked:"pill-blocked"}[status];
+  return {Unpaid:"pill-unpaid",  "Partially Paid":"pill-partial", Paid:"pill-paid", Blocked:"pill-blocked", "Payment Approval Pending":"pill-pending"}[status];
 }
 function showToast(msg){
   state.toast = msg;
@@ -376,7 +383,7 @@ function escJs(s){ return esc(String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\
 /* ---------------------------------------------------------------
    RENDER: BROWSER
 --------------------------------------------------------------- */
-const STATUSES = ["Unpaid", "Partially Paid", "Paid", "Blocked"];
+const STATUSES = ["Unpaid", "Partially Paid", "Payment Approval Pending", "Paid", "Blocked"];
 
 function renderMultiSelect(key, label, options, alignRight){
   const f = state.browser;
@@ -495,7 +502,7 @@ function renderDetail(){
       <td>${esc(li.territory)}</td>
       <td>${esc(li.plan)}</td>
       <td>${fmtMoney(li.amount, inv.currency)}</td>
-      <td><span class="pill ${li.paid?'pill-paid':'pill-unpaid'}">${li.paid?'Paid':'Unpaid'}</span></td>
+      <td><span class="pill ${li.paid?'pill-paid':li.pendingApproval?'pill-pending':'pill-unpaid'}">${li.paid?'Paid':li.pendingApproval?'Pending Approval':'Unpaid'}</span></td>
     </tr>`).join("");
 
   const history = payments.filter(p=>p.invoiceId===inv.id).sort((a,b)=>a.date.localeCompare(b.date));
@@ -510,7 +517,8 @@ function renderDetail(){
     </tr>`;
   }).join("");
 
-  const hasUnpaid = inv.lineItems.some(li=>!li.paid) && !inv.blocked;
+  const hasPending = inv.lineItems.some(li=>li.pendingApproval);
+  const hasPayable = !inv.blocked && !hasPending && inv.lineItems.some(li=>!li.paid && !li.pendingApproval);
 
   return `
     <button class="back-link" onclick="state.view='browser'; render()">&larr; Back to invoices</button>
@@ -572,7 +580,14 @@ function renderDetail(){
         </div>
         <div class="card">
           <h3>Actions</h3>
-          ${hasUnpaid ? `<button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="payThisInvoice('${inv.id}')">Pay this invoice</button>` : ''}
+          ${hasPayable ? `<button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="payThisInvoice('${inv.id}')">Pay this invoice</button>` : ''}
+          ${hasPending ? `
+            <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.5;">
+              Requested by <strong style="color:var(--text-primary);">${esc(inv.pendingRequestedBy)}</strong> on ${inv.pendingRequestedDate}
+            </div>
+            <button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="openApprovalModal('${inv.id}')">Approve Payment</button>
+            <button class="btn" style="width:100%;margin-bottom:10px;" onclick="rejectPayment('${inv.id}')">Reject Request</button>
+          ` : ''}
           ${!inv.blocked ? `<button class="btn" style="width:100%;" onclick="openBlockModal('${inv.id}')">Mark as Blocked</button>`
                           : `<button class="btn" style="width:100%;" onclick="removeBlock('${inv.id}')">Remove Block</button>`}
         </div>
@@ -677,7 +692,7 @@ function removeBlock(id){
 function payThisInvoice(id){
   state.view = "payments";
   state.paymentsQueue.selected = new Set(
-    invoices.find(i=>i.id===id).lineItems.filter(li=>!li.paid).map(li=>li.id)
+    invoices.find(i=>i.id===id).lineItems.filter(li=>!li.paid && !li.pendingApproval).map(li=>li.id)
   );
   state.paymentsQueue.expanded = new Set([id]);
   state.paymentsQueue.focusInvoiceId = id;
@@ -693,7 +708,7 @@ function renderPayments(){
   let groups = invoices
     .filter(inv=>!inv.blocked)
     .filter(inv=>!f.focusInvoiceId || inv.id===f.focusInvoiceId)
-    .map(inv=>({inv, unpaid: inv.lineItems.filter(li=>!li.paid)}))
+    .map(inv=>({inv, unpaid: inv.lineItems.filter(li=>!li.paid && !li.pendingApproval)}))
     .filter(g=>g.unpaid.length>0);
 
   const groupHtml = groups.map(({inv,unpaid})=>{
@@ -743,7 +758,7 @@ function renderPayments(){
     <div class="page-header">
       <div>
         <h1 class="page-title">Payments</h1>
-        <div class="page-sub">Select outstanding line items to pay in a single batch${f.focusInvoiceId?" — filtered to one invoice":""}</div>
+        <div class="page-sub">Select outstanding line items to submit for payment approval${f.focusInvoiceId?" — filtered to one invoice":""}</div>
       </div>
       ${f.focusInvoiceId ? `<button class="btn btn-small" onclick="state.paymentsQueue.focusInvoiceId=null; render()">Clear invoice filter</button>` : ''}
     </div>
@@ -763,7 +778,7 @@ function renderPayments(){
         <strong>${selectedLines.length}</strong> line item${selectedLines.length===1?'':'s'} selected
         across <strong>${invoiceCount}</strong> invoice${invoiceCount===1?'':'s'} &nbsp;·&nbsp; ${currencySummary}
       </div>
-      <button class="btn btn-primary" ${selectedLines.length===0?"disabled":""} onclick="openConfirm()">Review &amp; Process Payment</button>
+      <button class="btn btn-primary" ${selectedLines.length===0?"disabled":""} onclick="openConfirm()">Review &amp; Submit for Approval</button>
     </div>
   `;
 }
@@ -775,7 +790,7 @@ function toggleLine(lineId){
 }
 function toggleInvoiceLines(invId){
   const inv = invoices.find(i=>i.id===invId);
-  const unpaid = inv.lineItems.filter(li=>!li.paid);
+  const unpaid = inv.lineItems.filter(li=>!li.paid && !li.pendingApproval);
   const s = state.paymentsQueue.selected;
   const allSelected = unpaid.length>0 && unpaid.every(li=>s.has(li.id));
   unpaid.forEach(li=> allSelected ? s.delete(li.id) : s.add(li.id));
@@ -791,7 +806,7 @@ function expandAll(){
   invoices.forEach(inv=>{
     if(inv.blocked) return;
     if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
-    if(inv.lineItems.some(li=>!li.paid)) f.expanded.add(inv.id);
+    if(inv.lineItems.some(li=>!li.paid && !li.pendingApproval)) f.expanded.add(inv.id);
   });
   render();
 }
@@ -801,7 +816,7 @@ function selectAllVisible(){
     if(inv.blocked) return;
     if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
     inv.lineItems.forEach(li=>{
-      if(li.paid) return;
+      if(li.paid || li.pendingApproval) return;
       f.selected.add(li.id);
     });
   });
@@ -827,18 +842,18 @@ function renderConfirmModal(){
   return `
   <div class="modal-overlay">
     <div class="modal">
-      <h3>Confirm payment run</h3>
-      <p>You're about to pay <strong>${selected.length}</strong> line item${selected.length===1?'':'s'} across
-      <strong>${invoiceCount}</strong> invoice${invoiceCount===1?'':'s'} (${currencySummary}). This creates one payment record per line item, all under the same batch.</p>
+      <h3>Submit for approval</h3>
+      <p>You're about to submit <strong>${selected.length}</strong> line item${selected.length===1?'':'s'} across
+      <strong>${invoiceCount}</strong> invoice${invoiceCount===1?'':'s'} (${currencySummary}) for payment approval. Each affected invoice will show as Payment Approval Pending until a separate admin approves it.</p>
       <div class="field">
-        <label>Processing as</label>
+        <label>Requested by</label>
         <select onchange="state.confirmModal.processor=this.value">
           ${PROCESSORS.map(p=>`<option ${state.confirmModal.processor===p?"selected":""}>${esc(p)}</option>`).join("")}
         </select>
       </div>
       <div class="modal-actions">
         <button class="btn" onclick="state.confirmModal=null; render()">Cancel</button>
-        <button class="btn btn-primary" onclick="processPayment()">Process Payment</button>
+        <button class="btn btn-primary" onclick="submitForApproval()">Submit for Approval</button>
       </div>
     </div>
   </div>`;
@@ -867,26 +882,91 @@ function renderBlockModal(){
   </div>`;
 }
 
-function processPayment(){
-  const processor = state.confirmModal.processor;
-  const batchId = "batch-"+nextId();
+function submitForApproval(){
+  const requestedBy = state.confirmModal.processor;
   const today = new Date().toISOString().slice(0,10);
   const selectedIds = state.paymentsQueue.selected;
   let count = 0;
   invoices.forEach(inv=>{
+    let affected = false;
     inv.lineItems.forEach(li=>{
-      if(selectedIds.has(li.id) && !li.paid){
-        li.paid = true;
-        payments.push({ id: nextId(), lineItemId: li.id, invoiceId: inv.id, amount: li.amount, currency: inv.currency, date: today, processor, batchId });
+      if(selectedIds.has(li.id) && !li.paid && !li.pendingApproval){
+        li.pendingApproval = true;
+        affected = true;
         count++;
       }
     });
+    if(affected){
+      inv.pendingRequestedBy = requestedBy;
+      inv.pendingRequestedDate = today;
+    }
   });
   state.confirmModal = null;
   state.paymentsQueue.selected = new Set();
   state.paymentsQueue.focusInvoiceId = null;
-  showToast(`${count} payment${count===1?'':'s'} processed.`);
+  showToast(`${count} line item${count===1?'':'s'} submitted for approval.`);
   state.view = "browser";
+}
+
+function openApprovalModal(invoiceId){
+  state.approvalModal = { invoiceId, approver: PROCESSORS[0] };
+  render();
+}
+
+function renderApprovalModal(){
+  if(!state.approvalModal) return "";
+  const inv = invoices.find(i=>i.id===state.approvalModal.invoiceId);
+  const pendingLines = inv.lineItems.filter(li=>li.pendingApproval);
+  const total = pendingLines.reduce((s,li)=>s+li.amount,0);
+  return `
+  <div class="modal-overlay">
+    <div class="modal">
+      <h3>Approve payment</h3>
+      <p>You're about to approve <strong>${pendingLines.length}</strong> line item${pendingLines.length===1?'':'s'}
+      (${fmtMoney(total, inv.currency)}) on <strong>${esc(inv.invoiceNumber)}</strong>, requested by
+      <strong>${esc(inv.pendingRequestedBy)}</strong> on ${inv.pendingRequestedDate}. This creates one payment record per line item.</p>
+      <div class="field">
+        <label>Approving as</label>
+        <select onchange="state.approvalModal.approver=this.value">
+          ${PROCESSORS.map(p=>`<option ${state.approvalModal.approver===p?"selected":""}>${esc(p)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="state.approvalModal=null; render()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmApproval()">Approve Payment</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function confirmApproval(){
+  const { invoiceId, approver } = state.approvalModal;
+  const inv = invoices.find(i=>i.id===invoiceId);
+  const batchId = "batch-"+nextId();
+  const today = new Date().toISOString().slice(0,10);
+  let count = 0;
+  inv.lineItems.forEach(li=>{
+    if(li.pendingApproval){
+      li.paid = true;
+      li.pendingApproval = false;
+      payments.push({ id: nextId(), lineItemId: li.id, invoiceId: inv.id, amount: li.amount, currency: inv.currency, date: today, processor: approver, batchId });
+      count++;
+    }
+  });
+  inv.pendingRequestedBy = null;
+  inv.pendingRequestedDate = null;
+  state.approvalModal = null;
+  showToast(`${count} payment${count===1?'':'s'} approved.`);
+  render();
+}
+
+function rejectPayment(invoiceId){
+  const inv = invoices.find(i=>i.id===invoiceId);
+  inv.lineItems.forEach(li=>{ if(li.pendingApproval) li.pendingApproval = false; });
+  inv.pendingRequestedBy = null;
+  inv.pendingRequestedDate = null;
+  showToast("Payment request rejected.");
+  render();
 }
 
 /* ---------------------------------------------------------------
@@ -1083,6 +1163,9 @@ function render(){
   }
   if(state.blockModal){
     document.body.insertAdjacentHTML("beforeend", renderBlockModal());
+  }
+  if(state.approvalModal){
+    document.body.insertAdjacentHTML("beforeend", renderApprovalModal());
   }
   const existingToast = document.querySelector(".toast");
   if(existingToast) existingToast.remove();
