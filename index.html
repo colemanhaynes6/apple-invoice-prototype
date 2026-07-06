@@ -89,6 +89,8 @@
   .btn-small{padding:5px 11px;font-size:12px;}
   .btn-text{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;}
   .btn-danger-text{background:none;border:none;color:var(--danger-text);cursor:pointer;font-size:12px;padding:0;}
+  .licensor-link{background:none;border:none;padding:0;margin:0;font:inherit;color:var(--accent);cursor:pointer;text-decoration:none;text-align:left;}
+  .licensor-link:hover{text-decoration:underline;}
 
   /* Form elements */
   label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:5px;}
@@ -263,6 +265,7 @@ const PROCESSORS = ["Coleman Haynes", "David Ewell", "Pramit Bagui", "Abe Mirras
 const state = {
   view: "browser",
   selectedInvoiceId: null,
+  selectedLicensor: null,
   browser: { statusFilter:[], licensorFilter:[], search:"", dateFrom:"", dateTo:"", openMenu:null },
   paymentsQueue: { selected:new Set(), expanded:new Set() },
   toast: null,
@@ -271,14 +274,16 @@ const state = {
 };
 
 const licensors = [
-  "ACME Rights Management",
-  "The Right Stuff, LLC",
-  "Coleman's Publishing House",
-  "Biscuit the Cat Music Holdings",
-  "Culver City Licensors",
-  "Spinal Tap, LLC",
-  "Indie Music Publishing",
+  { name:"ACME Rights Management", poc:"Jordan Alvarez", contractRef:"CTR-ACME-2024-01" },
+  { name:"The Right Stuff, LLC", poc:"Morgan Lee", contractRef:"CTR-TRS-2023-14" },
+  { name:"Coleman's Publishing House", poc:"Sam Rivera", contractRef:"CTR-CPH-2024-02" },
+  { name:"Biscuit the Cat Music Holdings", poc:"Taylor Kim", contractRef:"CTR-BCM-2022-07" },
+  { name:"Culver City Licensors", poc:"Casey Nguyen", contractRef:"CTR-CCL-2024-03" },
+  { name:"Spinal Tap, LLC", poc:"Jamie Ellsworth", contractRef:"CTR-ST-2021-11" },
+  { name:"Indie Music Publishing", poc:"Robin Chen", contractRef:"CTR-IMP-2024-05" },
 ];
+const licensorNames = licensors.map(l=>l.name);
+function findLicensor(name){ return licensors.find(l=>l.name===name); }
 
 function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lines, blocked=false, paidLineIdx=[]}) {
   const lineItems = lines.map((l,i)=>({
@@ -301,6 +306,8 @@ function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lin
 let invoices = [
   makeInvoice({licensor:"ACME Rights Management", invoiceNumber:"ACME-1001", invoiceDate:"2026-05-02", terms:"Net 30", currency:"USD",
     lines:[{territory:"US",plan:"Individual",amount:18400},{territory:"US",plan:"Family",amount:9200},{territory:"CA",plan:"Individual",amount:4100}]}),
+  makeInvoice({licensor:"ACME Rights Management", invoiceNumber:"ACME-0876", invoiceDate:"2026-02-10", terms:"Net 30", currency:"USD",
+    lines:[{territory:"US",plan:"Individual",amount:9800},{territory:"CA",plan:"Family",amount:3200}], paidLineIdx:[0,1]}),
   makeInvoice({licensor:"The Right Stuff, LLC", invoiceNumber:"TRS-2201", invoiceDate:"2026-05-10", terms:"Net 45", currency:"GBP",
     lines:[{territory:"UK",plan:"Individual",amount:12750},{territory:"UK",plan:"Student",amount:2300}], paidLineIdx:[0,1]}),
   makeInvoice({licensor:"Coleman's Publishing House", invoiceNumber:"CPH-3305", invoiceDate:"2026-05-14", terms:"Net 30", currency:"EUR",
@@ -360,6 +367,11 @@ function showToast(msg){
   setTimeout(()=>{ state.toast=null; render(); }, 2600);
 }
 function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// Safe to embed as a single-quoted JS string literal inside an inline on* HTML attribute:
+// escapes backslashes/quotes at the JS level first, then esc() encodes the result for HTML.
+// (esc() alone isn't enough — the browser HTML-decodes attributes before handing them to the
+// JS parser, so a bare apostrophe in the value would prematurely close the JS string.)
+function escJs(s){ return esc(String(s).replace(/\\/g, "\\\\").replace(/'/g, "\\'")); }
 
 /* ---------------------------------------------------------------
    RENDER: BROWSER
@@ -374,7 +386,7 @@ function renderMultiSelect(key, label, options, alignRight){
     : `${selected.length} selected`;
   const optionsHtml = options.map(opt=>`
     <label class="ms-option">
-      <input type="checkbox" class="checkbox" ${selected.includes(opt)?"checked":""} onchange="toggleFilterOption('${key}','${esc(opt)}')">
+      <input type="checkbox" class="checkbox" ${selected.includes(opt)?"checked":""} onchange="toggleFilterOption('${key}','${escJs(opt)}')">
       <span>${esc(opt)}</span>
     </label>`).join("");
 
@@ -427,7 +439,7 @@ function renderBrowser(){
     const status = invoiceStatus(inv);
     return `<tr class="clickable" onclick="openDetail('${inv.id}')">
       <td class="mono">${esc(inv.invoiceNumber)}</td>
-      <td>${esc(inv.licensor)}</td>
+      <td><button class="licensor-link" onclick="event.stopPropagation(); openLicensor('${escJs(inv.licensor)}')">${esc(inv.licensor)}</button></td>
       <td>${inv.invoiceDate}</td>
       <td>${dueDate(inv.invoiceDate, inv.terms)}</td>
       <td>${fmtMoney(invoiceTotal(inv), inv.currency)}</td>
@@ -448,7 +460,7 @@ function renderBrowser(){
         <input class="search" type="text" placeholder="Search invoice # or licensor" value="${esc(f.search)}"
           oninput="state.browser.search=this.value; render()">
         ${renderMultiSelect("statusFilter", "All statuses", STATUSES)}
-        ${renderMultiSelect("licensorFilter", "All licensors", licensors, true)}
+        ${renderMultiSelect("licensorFilter", "All licensors", licensorNames, true)}
         <div class="date-range">
           <input type="date" value="${f.dateFrom}" onchange="state.browser.dateFrom=this.value; render()" aria-label="Invoice date from">
           <span class="date-range-sep">&ndash;</span>
@@ -477,6 +489,7 @@ function renderDetail(){
   const inv = invoices.find(i=>i.id===state.selectedInvoiceId);
   if(!inv) return `<div class="empty">Invoice not found.</div>`;
   const status = invoiceStatus(inv);
+  const lic = findLicensor(inv.licensor);
   const lineRows = inv.lineItems.map(li=>`
     <tr class="line-item-row">
       <td>${esc(li.territory)}</td>
@@ -504,7 +517,7 @@ function renderDetail(){
     <div class="page-header">
       <div>
         <h1 class="page-title">${esc(inv.invoiceNumber)}</h1>
-        <div class="page-sub">${esc(inv.licensor)}</div>
+        <div class="page-sub"><button class="licensor-link" onclick="openLicensor('${escJs(inv.licensor)}')">${esc(inv.licensor)}</button></div>
       </div>
       <span class="pill ${pillClass(status)}" style="font-size:13px;padding:5px 14px;">${status}</span>
     </div>
@@ -514,8 +527,8 @@ function renderDetail(){
         <div class="card">
           <h3>Invoice details</h3>
           <div class="kv-grid">
-            <div><div class="k">Licensor</div><div class="v">${esc(inv.licensor)}</div></div>
-            <div><div class="k">Point of contact</div><div class="v">Rights admin, ${esc(inv.licensor.split(' ')[0])}</div></div>
+            <div><div class="k">Licensor</div><div class="v"><button class="licensor-link" onclick="openLicensor('${escJs(inv.licensor)}')">${esc(inv.licensor)}</button></div></div>
+            <div><div class="k">Point of contact</div><div class="v">${esc(lic ? lic.poc : '—')}</div></div>
             <div><div class="k">Invoice date</div><div class="v">${inv.invoiceDate}</div></div>
             <div><div class="k">Payment terms</div><div class="v">${inv.terms}</div></div>
             <div><div class="k">Due date</div><div class="v">${dueDate(inv.invoiceDate, inv.terms)}</div></div>
@@ -562,6 +575,75 @@ function renderDetail(){
           ${hasUnpaid ? `<button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="payThisInvoice('${inv.id}')">Pay this invoice</button>` : ''}
           ${!inv.blocked ? `<button class="btn" style="width:100%;" onclick="openBlockModal('${inv.id}')">Mark as Blocked</button>`
                           : `<button class="btn" style="width:100%;" onclick="removeBlock('${inv.id}')">Remove Block</button>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   RENDER: LICENSOR DETAIL
+--------------------------------------------------------------- */
+function openLicensor(name){ state.selectedLicensor = name; state.view = "licensorDetail"; render(); }
+
+function renderLicensorDetail(){
+  const lic = findLicensor(state.selectedLicensor);
+  if(!lic) return `<div class="empty">Licensor not found.</div>`;
+  const licInvoices = invoices.filter(inv=>inv.licensor===lic.name);
+
+  const byCurrency = {};
+  licInvoices.forEach(inv=>{ byCurrency[inv.currency] = (byCurrency[inv.currency]||0) + invoiceOutstanding(inv); });
+  const outstandingSummary = Object.entries(byCurrency).map(([c,a])=>fmtMoney(a,c)).join("  +  ") || "—";
+
+  const rows = licInvoices.map(inv=>{
+    const status = invoiceStatus(inv);
+    return `<tr class="clickable" onclick="openDetail('${inv.id}')">
+      <td class="mono">${esc(inv.invoiceNumber)}</td>
+      <td>${inv.invoiceDate}</td>
+      <td>${dueDate(inv.invoiceDate, inv.terms)}</td>
+      <td>${fmtMoney(invoiceTotal(inv), inv.currency)}</td>
+      <td>${fmtMoney(invoiceOutstanding(inv), inv.currency)}</td>
+      <td><span class="pill ${pillClass(status)}">${status}</span></td>
+    </tr>`;
+  }).join("");
+
+  return `
+    <button class="back-link" onclick="state.view='browser'; render()">&larr; Back to invoices</button>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">${esc(lic.name)}</h1>
+        <div class="page-sub">${licInvoices.length} invoice${licInvoices.length===1?'':'s'} on file</div>
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <div>
+        <div class="card">
+          <h3>Invoices</h3>
+          <div class="table-scroll">
+            <table>
+              <thead><tr>
+                <th>Invoice #</th><th>Invoice Date</th><th>Due Date</th><th>Total</th><th>Outstanding</th><th>Status</th>
+              </tr></thead>
+              <tbody>${rows || `<tr><td colspan="6"><div class="empty">No invoices on file for this licensor.</div></td></tr>`}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="balance-box">
+            <div class="amt">${outstandingSummary}</div>
+            <div class="lbl">Total outstanding</div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Licensor</h3>
+          <div class="kv-grid">
+            <div><div class="k">Point of contact</div><div class="v">${esc(lic.poc)}</div></div>
+            <div><div class="k">Contract</div><div class="v"><button class="btn-text" onclick="showToast('Contract documents are not part of this prototype.')">${esc(lic.contractRef)}</button></div></div>
+          </div>
         </div>
       </div>
     </div>
@@ -633,7 +715,7 @@ function renderPayments(){
           <input type="checkbox" class="checkbox invoice-check" data-state="${selState}"
             onclick="event.stopPropagation()" onchange="toggleInvoiceLines('${inv.id}')">
           <span class="chevron ${expanded?'open':''}">&#9656;</span>
-          <span class="ig-licensor">${esc(inv.licensor)}</span>
+          <button class="licensor-link ig-licensor" onclick="event.stopPropagation(); openLicensor('${escJs(inv.licensor)}')">${esc(inv.licensor)}</button>
           <span class="ig-invnum mono">${esc(inv.invoiceNumber)}</span>
           <span class="ig-count">${unpaid.length} line${unpaid.length===1?'':'s'}</span>
           <span class="ig-due">Due ${dueDate(inv.invoiceDate, inv.terms)}</span>
@@ -810,7 +892,7 @@ function processPayment(){
 /* ---------------------------------------------------------------
    RENDER: UPLOAD & CREATE
 --------------------------------------------------------------- */
-let manualForm = { licensor: licensors[0], invoiceNumber:"", invoiceDate:"", terms:"Net 30", currency:"USD",
+let manualForm = { licensor: licensorNames[0], invoiceNumber:"", invoiceDate:"", terms:"Net 30", currency:"USD",
   lines: [{territory:"", plan:"", amount:""}] };
 
 function renderUpload(){
@@ -830,7 +912,7 @@ function renderUpload(){
             <div class="field">
               <label>Licensor</label>
               <select onchange="manualForm.licensor=this.value">
-                ${licensors.map(l=>`<option ${manualForm.licensor===l?"selected":""}>${esc(l)}</option>`).join("")}
+                ${licensorNames.map(l=>`<option ${manualForm.licensor===l?"selected":""}>${esc(l)}</option>`).join("")}
               </select>
             </div>
             <div class="field">
@@ -928,7 +1010,7 @@ function submitManualInvoice(){
     lines: manualForm.lines.map(l=>({territory:l.territory, plan:l.plan, amount:parseFloat(l.amount)})),
   });
   invoices.unshift(inv);
-  manualForm = { licensor: licensors[0], invoiceNumber:"", invoiceDate:"", terms:"Net 30", currency:"USD", lines:[{territory:"",plan:"",amount:""}] };
+  manualForm = { licensor: licensorNames[0], invoiceNumber:"", invoiceDate:"", terms:"Net 30", currency:"USD", lines:[{territory:"",plan:"",amount:""}] };
   showToast(`Invoice ${inv.invoiceNumber} created.`);
   state.view = "browser";
 }
@@ -979,11 +1061,12 @@ function parseCsvAndCreate(text){
 --------------------------------------------------------------- */
 function render(){
   document.querySelectorAll(".tab").forEach(t=>{
-    t.classList.toggle("active", t.dataset.view===state.view || (state.view==="detail" && t.dataset.view==="browser"));
+    t.classList.toggle("active", t.dataset.view===state.view || ((state.view==="detail" || state.view==="licensorDetail") && t.dataset.view==="browser"));
   });
   let html = "";
   if(state.view==="browser") html = renderBrowser();
   else if(state.view==="detail") html = renderDetail();
+  else if(state.view==="licensorDetail") html = renderLicensorDetail();
   else if(state.view==="payments") html = renderPayments();
   else if(state.view==="upload") html = renderUpload();
   document.getElementById("app").innerHTML = html;
