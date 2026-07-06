@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Publishing Ops · Invoices</title>
+<style>
+  :root{
+    --bg:#f5f5f7;
+    --surface:#ffffff;
+    --border:#d2d2d7;
+    --border-light:#e8e8ed;
+    --text-primary:#1d1d1f;
+    --text-secondary:#6e6e73;
+    --accent:#0071e3;
+    --accent-hover:#0077ed;
+    --accent-bg:#e8f2fd;
+    --success-bg:#eafaf0;
+    --success-text:#1a7f3c;
+    --warning-bg:#fff4e5;
+    --warning-text:#b25000;
+    --danger-bg:#ffece8;
+    --danger-text:#c0271f;
+    --neutral-bg:#f0f0f2;
+    --neutral-text:#6e6e73;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text-primary);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none;}
+  button{font-family:inherit;}
+  button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible{
+    outline:2px solid var(--accent);outline-offset:2px;
+  }
+
+  /* Top bar */
+  .topbar{
+    background:var(--surface);
+    border-bottom:1px solid var(--border-light);
+    position:sticky;top:0;z-index:10;
+  }
+  .topbar-inner{
+    max-width:1180px;margin:0 auto;
+    display:flex;align-items:center;gap:28px;
+    padding:0 28px;height:52px;
+  }
+  .brand{font-size:15px;font-weight:600;letter-spacing:-0.01em;color:var(--text-primary);white-space:nowrap;}
+  .brand span{color:var(--text-secondary);font-weight:400;}
+  .tabs{display:flex;gap:4px;flex:1;}
+  .tab{
+    appearance:none;border:none;background:none;cursor:pointer;
+    font-size:13px;font-weight:500;color:var(--text-secondary);
+    padding:16px 14px;border-bottom:2px solid transparent;
+    transition:color .15s ease;
+  }
+  .tab:hover{color:var(--text-primary);}
+  .tab.active{color:var(--text-primary);border-bottom-color:var(--accent);}
+
+  .page{max-width:1180px;margin:0 auto;padding:32px 28px 80px;}
+  .page-header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:22px;flex-wrap:wrap;gap:10px;}
+  .page-title{font-size:26px;font-weight:600;letter-spacing:-0.015em;margin:0;}
+  .page-sub{color:var(--text-secondary);font-size:13px;margin-top:4px;}
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--border-light);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    margin-bottom:20px;
+  }
+  .card h3{font-size:14px;font-weight:600;margin:0 0 14px;letter-spacing:-0.01em;}
+
+  /* Buttons */
+  .btn{
+    appearance:none;border:1px solid var(--border);background:var(--surface);
+    color:var(--text-primary);font-size:13px;font-weight:500;
+    padding:8px 16px;border-radius:8px;cursor:pointer;transition:background .12s ease;
+  }
+  .btn:hover{background:var(--neutral-bg);}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .btn-primary:hover{background:var(--accent-hover);}
+  .btn-primary:disabled{background:#b9b9bd;border-color:#b9b9bd;cursor:not-allowed;}
+  .btn-small{padding:5px 11px;font-size:12px;}
+  .btn-text{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0;}
+  .btn-danger-text{background:none;border:none;color:var(--danger-text);cursor:pointer;font-size:12px;padding:0;}
+
+  /* Form elements */
+  label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:5px;}
+  input[type=text],input[type=number],input[type=date],select,textarea{
+    width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;
+    font-size:13px;color:var(--text-primary);background:#fff;font-family:inherit;
+  }
+  .field{margin-bottom:14px;}
+  .field-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  .field-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+
+  /* Tables */
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{
+    text-align:left;font-size:11px;font-weight:600;color:var(--text-secondary);
+    text-transform:uppercase;letter-spacing:0.03em;
+    padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;
+  }
+  td{padding:11px 12px;border-bottom:1px solid var(--border-light);vertical-align:middle;}
+  tr.clickable{cursor:pointer;}
+  tr.clickable:hover td{background:var(--neutral-bg);}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;}
+
+  /* Status pill */
+  .pill{
+    display:inline-flex;align-items:center;font-size:11.5px;font-weight:600;
+    padding:3px 10px;border-radius:20px;white-space:nowrap;
+  }
+  .pill-unpaid{background:var(--neutral-bg);color:var(--neutral-text);}
+  .pill-partial{background:var(--warning-bg);color:var(--warning-text);}
+  .pill-paid{background:var(--success-bg);color:var(--success-text);}
+  .pill-blocked{background:var(--danger-bg);color:var(--danger-text);}
+
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
+  .toolbar select, .toolbar input{width:auto;min-width:140px;}
+  .toolbar .search{flex:1;min-width:200px;}
+
+  .empty{text-align:center;color:var(--text-secondary);font-size:13px;padding:40px 0;}
+
+  /* Detail view */
+  .back-link{font-size:13px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-bottom:16px;background:none;border:none;padding:0;}
+  .detail-grid{display:grid;grid-template-columns:2fr 1fr;gap:20px;}
+  .kv-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 20px;}
+  .kv-grid .k{font-size:11px;color:var(--text-secondary);margin-bottom:2px;}
+  .kv-grid .v{font-size:14px;font-weight:500;}
+  .balance-box{background:var(--bg);border-radius:8px;padding:16px;text-align:center;}
+  .balance-box .amt{font-size:28px;font-weight:700;letter-spacing:-0.02em;}
+  .balance-box .lbl{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;margin-top:4px;}
+
+  .line-item-row td{font-size:13px;}
+  .checkbox{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
+
+  .summary-bar{
+    position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border);
+    padding:16px 24px;display:flex;justify-content:space-between;align-items:center;
+    border-radius:var(--radius) var(--radius) 0 0;box-shadow:0 -4px 14px rgba(0,0,0,0.04);
+  }
+  .summary-bar .stats{font-size:13px;color:var(--text-secondary);}
+  .summary-bar .stats strong{color:var(--text-primary);}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;z-index:100;
+  }
+  .modal{background:#fff;border-radius:14px;padding:26px 28px;max-width:440px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.25);}
+  .modal h3{margin:0 0 8px;font-size:17px;}
+  .modal p{font-size:13px;color:var(--text-secondary);margin:0 0 18px;line-height:1.5;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;}
+
+  .badge-count{background:var(--accent);color:#fff;border-radius:20px;font-size:11px;padding:1px 7px;margin-left:5px;}
+  .csv-drop{
+    border:1.5px dashed var(--border);border-radius:10px;padding:28px;text-align:center;
+    color:var(--text-secondary);font-size:13px;margin-bottom:14px;
+  }
+  .csv-drop code{background:var(--neutral-bg);padding:2px 5px;border-radius:4px;font-size:11.5px;}
+  .line-item-builder-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px;}
+  .toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+    background:#1d1d1f;color:#fff;padding:11px 20px;border-radius:8px;font-size:13px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.2);z-index:200;
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Publishing Ops <span>· Invoices</span></div>
+    <div class="tabs" id="tabs">
+      <button class="tab" data-view="upload">Upload &amp; Create</button>
+      <button class="tab" data-view="browser">Browse Invoices</button>
+      <button class="tab" data-view="payments">Payments</button>
+    </div>
+  </div>
+</div>
+
+<div id="app" class="page"></div>
+
+<script>
+/* ---------------------------------------------------------------
+   STATE
+--------------------------------------------------------------- */
+let idCounter = 1000;
+const nextId = () => (idCounter++).toString();
+
+const CURRENCY_SYMBOLS = { USD:"$", GBP:"£", EUR:"€", JPY:"¥", CAD:"C$", AUD:"A$" };
+const TERMS_DAYS = { "Net 15":15, "Net 30":30, "Net 45":45, "Net 60":60 };
+const PROCESSORS = ["R. Chen", "M. Okafor", "T. Iverson"];
+
+const state = {
+  view: "browser",
+  selectedInvoiceId: null,
+  browser: { status:"all", licensor:"all", search:"" },
+  paymentsQueue: { licensor:"all", territory:"all", plan:"all", selected:new Set() },
+  toast: null,
+  confirmModal: null,
+};
+
+const licensors = [
+  "Cedarwood Music Publishing",
+  "Northbridge Rights Group",
+  "Solene Music Group",
+  "Ashgrove Sync & Songs",
+  "Kestrel Publishing Partners",
+];
+
+function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lines, blocked=false, paidLineIdx=[]}) {
+  const lineItems = lines.map((l,i)=>({
+    id: nextId(),
+    territory: l.territory,
+    plan: l.plan,
+    amount: l.amount,
+    paid: paidLineIdx.includes(i),
+  }));
+  return {
+    id: nextId(),
+    licensor, invoiceNumber, invoiceDate, terms, currency,
+    lineItems,
+    blocked,
+    createdBy: PROCESSORS[0],
+    source: "Manual entry",
+  };
+}
+
+let invoices = [
+  makeInvoice({licensor:"Cedarwood Music Publishing", invoiceNumber:"CW-10231", invoiceDate:"2026-05-02", terms:"Net 30", currency:"USD",
+    lines:[{territory:"US",plan:"Individual",amount:18400},{territory:"US",plan:"Family",amount:9200},{territory:"CA",plan:"Individual",amount:4100}]}),
+  makeInvoice({licensor:"Northbridge Rights Group", invoiceNumber:"NB-88123", invoiceDate:"2026-05-10", terms:"Net 45", currency:"GBP",
+    lines:[{territory:"UK",plan:"Individual",amount:12750},{territory:"UK",plan:"Student",amount:2300}], paidLineIdx:[0,1]}),
+  makeInvoice({licensor:"Solene Music Group", invoiceNumber:"SMG-4471", invoiceDate:"2026-05-14", terms:"Net 30", currency:"EUR",
+    lines:[{territory:"FR",plan:"Individual",amount:15600},{territory:"FR",plan:"Family",amount:8900},{territory:"DE",plan:"Individual",amount:11200}], paidLineIdx:[0]}),
+  makeInvoice({licensor:"Ashgrove Sync & Songs", invoiceNumber:"ASS-7790", invoiceDate:"2026-04-20", terms:"Net 30", currency:"USD",
+    lines:[{territory:"US",plan:"Voice",amount:3400}], blocked:true}),
+  makeInvoice({licensor:"Kestrel Publishing Partners", invoiceNumber:"KPP-2209", invoiceDate:"2026-05-18", terms:"Net 60", currency:"JPY",
+    lines:[{territory:"JP",plan:"Individual",amount:820000},{territory:"JP",plan:"Family",amount:410000}]}),
+  makeInvoice({licensor:"Cedarwood Music Publishing", invoiceNumber:"CW-10255", invoiceDate:"2026-05-22", terms:"Net 30", currency:"USD",
+    lines:[{territory:"AU",plan:"Individual",amount:6700},{territory:"AU",plan:"Student",amount:1900}], paidLineIdx:[0,1]}),
+];
+
+let payments = [];
+// seed payment history matching the paid line items above
+(function seedPayments(){
+  invoices.forEach(inv=>{
+    inv.lineItems.filter(li=>li.paid).forEach((li,idx)=>{
+      payments.push({
+        id: nextId(), lineItemId: li.id, invoiceId: inv.id,
+        amount: li.amount, currency: inv.currency,
+        date: "2026-06-0"+(2+idx), processor: PROCESSORS[idx % PROCESSORS.length],
+        batchId: "batch-"+inv.id,
+      });
+    });
+  });
+})();
+
+/* ---------------------------------------------------------------
+   HELPERS
+--------------------------------------------------------------- */
+function fmtMoney(amount, currency){
+  const sym = CURRENCY_SYMBOLS[currency] || currency+" ";
+  return sym + amount.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function dueDate(invoiceDate, terms){
+  const d = new Date(invoiceDate);
+  d.setDate(d.getDate() + (TERMS_DAYS[terms]||30));
+  return d.toISOString().slice(0,10);
+}
+function invoiceTotal(inv){ return inv.lineItems.reduce((s,li)=>s+li.amount,0); }
+function invoiceOutstanding(inv){ return inv.lineItems.filter(li=>!li.paid).reduce((s,li)=>s+li.amount,0); }
+function invoiceStatus(inv){
+  if(inv.blocked) return "Blocked";
+  const paidCount = inv.lineItems.filter(li=>li.paid).length;
+  if(paidCount===0) return "Unpaid";
+  if(paidCount===inv.lineItems.length) return "Paid";
+  return "Partially Paid";
+}
+function pillClass(status){
+  return {Unpaid:"pill-unpaid",  "Partially Paid":"pill-partial", Paid:"pill-paid", Blocked:"pill-blocked"}[status];
+}
+function showToast(msg){
+  state.toast = msg;
+  render();
+  setTimeout(()=>{ state.toast=null; render(); }, 2600);
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------------------------------------------------------------
+   RENDER: BROWSER
+--------------------------------------------------------------- */
+function renderBrowser(){
+  const f = state.browser;
+  const filtered = invoices.filter(inv=>{
+    if(f.status!=="all" && invoiceStatus(inv)!==f.status) return false;
+    if(f.licensor!=="all" && inv.licensor!==f.licensor) return false;
+    if(f.search){
+      const s = f.search.toLowerCase();
+      if(!inv.invoiceNumber.toLowerCase().includes(s) && !inv.licensor.toLowerCase().includes(s)) return false;
+    }
+    return true;
+  });
+
+  const rows = filtered.map(inv=>{
+    const status = invoiceStatus(inv);
+    return `<tr class="clickable" onclick="openDetail('${inv.id}')">
+      <td class="mono">${esc(inv.invoiceNumber)}</td>
+      <td>${esc(inv.licensor)}</td>
+      <td>${inv.invoiceDate}</td>
+      <td>${dueDate(inv.invoiceDate, inv.terms)}</td>
+      <td>${fmtMoney(invoiceTotal(inv), inv.currency)}</td>
+      <td>${fmtMoney(invoiceOutstanding(inv), inv.currency)}</td>
+      <td><span class="pill ${pillClass(status)}">${status}</span></td>
+    </tr>`;
+  }).join("");
+
+  const licensorOptions = licensors.map(l=>`<option ${f.licensor===l?"selected":""}>${esc(l)}</option>`).join("");
+
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Invoices</h1>
+        <div class="page-sub">${filtered.length} of ${invoices.length} invoices</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="toolbar">
+        <input class="search" type="text" placeholder="Search invoice # or licensor" value="${esc(f.search)}"
+          oninput="state.browser.search=this.value; render()">
+        <select onchange="state.browser.status=this.value; render()">
+          <option value="all" ${f.status==="all"?"selected":""}>All statuses</option>
+          <option ${f.status==="Unpaid"?"selected":""}>Unpaid</option>
+          <option value="Partially Paid" ${f.status==="Partially Paid"?"selected":""}>Partially Paid</option>
+          <option ${f.status==="Paid"?"selected":""}>Paid</option>
+          <option ${f.status==="Blocked"?"selected":""}>Blocked</option>
+        </select>
+        <select onchange="state.browser.licensor=this.value; render()">
+          <option value="all">All licensors</option>
+          ${licensorOptions}
+        </select>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Invoice #</th><th>Licensor</th><th>Invoice Date</th><th>Due Date</th>
+          <th>Total</th><th>Outstanding</th><th>Status</th>
+        </tr></thead>
+        <tbody>${rows || `<tr><td colspan="7"><div class="empty">No invoices match these filters.</div></td></tr>`}</tbody>
+      </table>
+    </div>
+  `;
+}
+
+/* ---------------------------------------------------------------
+   RENDER: DETAIL
+--------------------------------------------------------------- */
+function openDetail(id){ state.selectedInvoiceId = id; state.view="detail"; render(); }
+
+function renderDetail(){
+  const inv = invoices.find(i=>i.id===state.selectedInvoiceId);
+  if(!inv) return `<div class="empty">Invoice not found.</div>`;
+  const status = invoiceStatus(inv);
+  const lineRows = inv.lineItems.map(li=>`
+    <tr class="line-item-row">
+      <td>${esc(li.territory)}</td>
+      <td>${esc(li.plan)}</td>
+      <td>${fmtMoney(li.amount, inv.currency)}</td>
+      <td><span class="pill ${li.paid?'pill-paid':'pill-unpaid'}">${li.paid?'Paid':'Unpaid'}</span></td>
+    </tr>`).join("");
+
+  const history = payments.filter(p=>p.invoiceId===inv.id).sort((a,b)=>a.date.localeCompare(b.date));
+  const historyRows = history.map(p=>{
+    const li = inv.lineItems.find(l=>l.id===p.lineItemId);
+    return `<tr>
+      <td>${p.date}</td>
+      <td>${fmtMoney(p.amount, inv.currency)}</td>
+      <td>${li?esc(li.territory+' · '+li.plan):'—'}</td>
+      <td>${esc(p.processor)}</td>
+      <td class="mono">${esc(p.batchId)}</td>
+    </tr>`;
+  }).join("");
+
+  const hasUnpaid = inv.lineItems.some(li=>!li.paid) && !inv.blocked;
+
+  return `
+    <button class="back-link" onclick="state.view='browser'; render()">&larr; Back to invoices</button>
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">${esc(inv.invoiceNumber)}</h1>
+        <div class="page-sub">${esc(inv.licensor)}</div>
+      </div>
+      <span class="pill ${pillClass(status)}" style="font-size:13px;padding:5px 14px;">${status}</span>
+    </div>
+
+    <div class="detail-grid">
+      <div>
+        <div class="card">
+          <h3>Invoice details</h3>
+          <div class="kv-grid">
+            <div><div class="k">Licensor</div><div class="v">${esc(inv.licensor)}</div></div>
+            <div><div class="k">Point of contact</div><div class="v">Rights admin, ${esc(inv.licensor.split(' ')[0])}</div></div>
+            <div><div class="k">Invoice date</div><div class="v">${inv.invoiceDate}</div></div>
+            <div><div class="k">Payment terms</div><div class="v">${inv.terms}</div></div>
+            <div><div class="k">Due date</div><div class="v">${dueDate(inv.invoiceDate, inv.terms)}</div></div>
+            <div><div class="k">Currency</div><div class="v">${inv.currency}</div></div>
+            <div><div class="k">Created by</div><div class="v">${esc(inv.createdBy)}</div></div>
+            <div><div class="k">Source</div><div class="v">${esc(inv.source)}</div></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Line items</h3>
+          <table>
+            <thead><tr><th>Territory</th><th>Plan</th><th>Amount</th><th>Status</th></tr></thead>
+            <tbody>${lineRows}</tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Payment history</h3>
+          ${history.length ? `
+          <table>
+            <thead><tr><th>Date</th><th>Amount</th><th>Line item paid</th><th>Processor</th><th>Batch</th></tr></thead>
+            <tbody>${historyRows}</tbody>
+          </table>` : `<div class="empty">No payments recorded yet.</div>`}
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="balance-box">
+            <div class="amt">${fmtMoney(invoiceOutstanding(inv), inv.currency)}</div>
+            <div class="lbl">Outstanding balance</div>
+          </div>
+          <div style="margin-top:14px;font-size:12px;color:var(--text-secondary);display:flex;justify-content:space-between;">
+            <span>Invoice total</span><span>${fmtMoney(invoiceTotal(inv), inv.currency)}</span>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Actions</h3>
+          ${hasUnpaid ? `<button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="payThisInvoice('${inv.id}')">Pay this invoice</button>` : ''}
+          ${!inv.blocked ? `<button class="btn" style="width:100%;" onclick="toggleBlock('${inv.id}', true)">Mark as Blocked</button>`
+                          : `<button class="btn" style="width:100%;" onclick="toggleBlock('${inv.id}', false)">Remove Block</button>`}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function toggleBlock(id, blocked){
+  const inv = invoices.find(i=>i.id===id);
+  if(blocked){
+    const reason = prompt("Reason for blocking this invoice (required):");
+    if(!reason) return;
+    inv.blocked = true;
+    inv.blockReason = reason;
+    showToast("Invoice blocked.");
+  } else {
+    inv.blocked = false;
+    inv.blockReason = null;
+    showToast("Block removed.");
+  }
+  render();
+}
+
+function payThisInvoice(id){
+  state.view = "payments";
+  state.paymentsQueue.licensor = "all";
+  state.paymentsQueue.territory = "all";
+  state.paymentsQueue.plan = "all";
+  state.paymentsQueue.selected = new Set(
+    invoices.find(i=>i.id===id).lineItems.filter(li=>!li.paid).map(li=>li.id)
+  );
+  state.paymentsQueue.focusInvoiceId = id;
+  render();
+}
+
+/* ---------------------------------------------------------------
+   RENDER: PAYMENTS QUEUE (batch run)
+--------------------------------------------------------------- */
+function renderPayments(){
+  const f = state.paymentsQueue;
+  // gather all unpaid, unblocked line items with parent invoice info
+  let rows = [];
+  invoices.forEach(inv=>{
+    if(inv.blocked) return;
+    inv.lineItems.forEach(li=>{
+      if(li.paid) return;
+      if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
+      rows.push({inv, li});
+    });
+  });
+  rows = rows.filter(r=>{
+    if(f.licensor!=="all" && r.inv.licensor!==f.licensor) return false;
+    if(f.territory!=="all" && r.li.territory!==f.territory) return false;
+    if(f.plan!=="all" && r.li.plan!==f.plan) return false;
+    return true;
+  });
+
+  const territories = [...new Set(invoices.flatMap(i=>i.lineItems.map(l=>l.territory)))].sort();
+  const plans = [...new Set(invoices.flatMap(i=>i.lineItems.map(l=>l.plan)))].sort();
+
+  const tableRows = rows.map(({inv,li})=>{
+    const checked = f.selected.has(li.id);
+    return `<tr>
+      <td><input type="checkbox" class="checkbox" ${checked?"checked":""} onchange="toggleLine('${li.id}')"></td>
+      <td>${esc(inv.licensor)}</td>
+      <td class="mono">${esc(inv.invoiceNumber)}</td>
+      <td>${esc(li.territory)}</td>
+      <td>${esc(li.plan)}</td>
+      <td>${fmtMoney(li.amount, inv.currency)}</td>
+      <td>${dueDate(inv.invoiceDate, inv.terms)}</td>
+    </tr>`;
+  }).join("");
+
+  // summary of selected
+  const selectedRows = rows.filter(r=>f.selected.has(r.li.id));
+  const byCurrency = {};
+  selectedRows.forEach(r=>{ byCurrency[r.inv.currency] = (byCurrency[r.inv.currency]||0) + r.li.amount; });
+  const invoiceCount = new Set(selectedRows.map(r=>r.inv.id)).size;
+  const currencySummary = Object.entries(byCurrency).map(([c,a])=>fmtMoney(a,c)).join("  +  ") || "—";
+
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Payments</h1>
+        <div class="page-sub">Select outstanding line items to pay in a single batch${f.focusInvoiceId?" — filtered to one invoice":""}</div>
+      </div>
+      ${f.focusInvoiceId ? `<button class="btn btn-small" onclick="state.paymentsQueue.focusInvoiceId=null; render()">Clear invoice filter</button>` : ''}
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <select onchange="state.paymentsQueue.licensor=this.value; render()">
+          <option value="all">All licensors</option>
+          ${licensors.map(l=>`<option ${f.licensor===l?"selected":""}>${esc(l)}</option>`).join("")}
+        </select>
+        <select onchange="state.paymentsQueue.territory=this.value; render()">
+          <option value="all">All territories</option>
+          ${territories.map(t=>`<option ${f.territory===t?"selected":""}>${esc(t)}</option>`).join("")}
+        </select>
+        <select onchange="state.paymentsQueue.plan=this.value; render()">
+          <option value="all">All plans</option>
+          ${plans.map(p=>`<option ${f.plan===p?"selected":""}>${esc(p)}</option>`).join("")}
+        </select>
+        <button class="btn btn-small" onclick="selectAllVisible()">Select all visible</button>
+        <button class="btn btn-small" onclick="state.paymentsQueue.selected=new Set(); render()">Clear selection</button>
+      </div>
+      <table>
+        <thead><tr>
+          <th></th><th>Licensor</th><th>Invoice #</th><th>Territory</th><th>Plan</th><th>Amount</th><th>Due date</th>
+        </tr></thead>
+        <tbody>${tableRows || `<tr><td colspan="7"><div class="empty">No outstanding line items match these filters.</div></td></tr>`}</tbody>
+      </table>
+    </div>
+
+    <div class="summary-bar">
+      <div class="stats">
+        <strong>${selectedRows.length}</strong> line item${selectedRows.length===1?'':'s'} selected
+        across <strong>${invoiceCount}</strong> invoice${invoiceCount===1?'':'s'} &nbsp;·&nbsp; ${currencySummary}
+      </div>
+      <button class="btn btn-primary" ${selectedRows.length===0?"disabled":""} onclick="openConfirm()">Review &amp; Process Payment</button>
+    </div>
+  `;
+}
+
+function toggleLine(lineId){
+  const s = state.paymentsQueue.selected;
+  s.has(lineId) ? s.delete(lineId) : s.add(lineId);
+  render();
+}
+function selectAllVisible(){
+  const f = state.paymentsQueue;
+  invoices.forEach(inv=>{
+    if(inv.blocked) return;
+    if(f.focusInvoiceId && inv.id!==f.focusInvoiceId) return;
+    if(f.licensor!=="all" && inv.licensor!==f.licensor) return;
+    inv.lineItems.forEach(li=>{
+      if(li.paid) return;
+      if(f.territory!=="all" && li.territory!==f.territory) return;
+      if(f.plan!=="all" && li.plan!==f.plan) return;
+      f.selected.add(li.id);
+    });
+  });
+  render();
+}
+
+function openConfirm(){
+  state.confirmModal = { processor: PROCESSORS[0] };
+  render();
+}
+
+function renderConfirmModal(){
+  if(!state.confirmModal) return "";
+  const f = state.paymentsQueue;
+  const selectedIds = f.selected;
+  let selected = [];
+  invoices.forEach(inv=> inv.lineItems.forEach(li=>{ if(selectedIds.has(li.id)) selected.push({inv,li}); }));
+  const byCurrency = {};
+  selected.forEach(({inv,li})=>{ byCurrency[inv.currency] = (byCurrency[inv.currency]||0)+li.amount; });
+  const currencySummary = Object.entries(byCurrency).map(([c,a])=>fmtMoney(a,c)).join(", ");
+  const invoiceCount = new Set(selected.map(s=>s.inv.id)).size;
+
+  return `
+  <div class="modal-overlay">
+    <div class="modal">
+      <h3>Confirm payment run</h3>
+      <p>You're about to pay <strong>${selected.length}</strong> line item${selected.length===1?'':'s'} across
+      <strong>${invoiceCount}</strong> invoice${invoiceCount===1?'':'s'} (${currencySummary}). This creates one payment record per line item, all under the same batch.</p>
+      <div class="field">
+        <label>Processing as</label>
+        <select onchange="state.confirmModal.processor=this.value">
+          ${PROCESSORS.map(p=>`<option ${state.confirmModal.processor===p?"selected":""}>${esc(p)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="state.confirmModal=null; render()">Cancel</button>
+        <button class="btn btn-primary" onclick="processPayment()">Process Payment</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function processPayment(){
+  const processor = state.confirmModal.processor;
+  const batchId = "batch-"+nextId();
+  const today = new Date().toISOString().slice(0,10);
+  const selectedIds = state.paymentsQueue.selected;
+  let count = 0;
+  invoices.forEach(inv=>{
+    inv.lineItems.forEach(li=>{
+      if(selectedIds.has(li.id) && !li.paid){
+        li.paid = true;
+        payments.push({ id: nextId(), lineItemId: li.id, invoiceId: inv.id, amount: li.amount, currency: inv.currency, date: today, processor, batchId });
+        count++;
+      }
+    });
+  });
+  state.confirmModal = null;
+  state.paymentsQueue.selected = new Set();
+  state.paymentsQueue.focusInvoiceId = null;
+  showToast(`${count} payment${count===1?'':'s'} processed.`);
+  state.view = "browser";
+}
+
+/* ---------------------------------------------------------------
+   RENDER: UPLOAD & CREATE
+--------------------------------------------------------------- */
+let manualForm = { licensor: licensors[0], invoiceNumber:"", invoiceDate:"", terms:"Net 30", currency:"USD",
+  lines: [{territory:"", plan:"", amount:""}] };
+
+function renderUpload(){
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Upload &amp; Create</h1>
+        <div class="page-sub">Add a new licensor invoice via CSV upload or manual entry</div>
+      </div>
+    </div>
+
+    <div class="detail-grid">
+      <div>
+        <div class="card">
+          <h3>Manual entry</h3>
+          <div class="field-row-3">
+            <div class="field">
+              <label>Licensor</label>
+              <select onchange="manualForm.licensor=this.value">
+                ${licensors.map(l=>`<option ${manualForm.licensor===l?"selected":""}>${esc(l)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label>Invoice number</label>
+              <input type="text" value="${esc(manualForm.invoiceNumber)}" oninput="manualForm.invoiceNumber=this.value" placeholder="e.g. CW-10300">
+            </div>
+            <div class="field">
+              <label>Invoice date</label>
+              <input type="date" value="${manualForm.invoiceDate}" oninput="manualForm.invoiceDate=this.value">
+            </div>
+          </div>
+          <div class="field-row-3">
+            <div class="field">
+              <label>Payment terms</label>
+              <select onchange="manualForm.terms=this.value">
+                ${Object.keys(TERMS_DAYS).map(t=>`<option ${manualForm.terms===t?"selected":""}>${t}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label>Currency</label>
+              <select onchange="manualForm.currency=this.value">
+                ${Object.keys(CURRENCY_SYMBOLS).map(c=>`<option ${manualForm.currency===c?"selected":""}>${c}</option>`).join("")}
+              </select>
+            </div>
+            <div class="field">
+              <label>Invoice total (calculated)</label>
+              <input type="text" disabled value="${fmtMoney(manualForm.lines.reduce((s,l)=>s+(parseFloat(l.amount)||0),0), manualForm.currency)}">
+            </div>
+          </div>
+
+          <h3 style="margin-top:20px;">Line items (territory &amp; plan)</h3>
+          ${manualForm.lines.map((l,i)=>`
+            <div class="line-item-builder-row">
+              <div class="field" style="margin-bottom:0;">
+                <label>Territory</label>
+                <input type="text" value="${esc(l.territory)}" oninput="manualForm.lines[${i}].territory=this.value; render()" placeholder="US">
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Plan</label>
+                <input type="text" value="${esc(l.plan)}" oninput="manualForm.lines[${i}].plan=this.value; render()" placeholder="Individual">
+              </div>
+              <div class="field" style="margin-bottom:0;">
+                <label>Amount</label>
+                <input type="number" value="${l.amount}" oninput="manualForm.lines[${i}].amount=this.value; render()" placeholder="0.00">
+              </div>
+              <button class="btn-danger-text" onclick="removeLine(${i})" title="Remove line" ${manualForm.lines.length===1?"disabled":""}>Remove</button>
+            </div>
+          `).join("")}
+          <button class="btn btn-small" onclick="addLine()">+ Add line item</button>
+
+          <div style="margin-top:20px;">
+            <button class="btn btn-primary" onclick="submitManualInvoice()">Create Invoice</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>CSV upload</h3>
+          <div class="csv-drop">
+            Expected columns:<br>
+            <code>licensor, invoice_number, invoice_date, terms, currency, territory, plan, amount</code>
+            <br><br>
+            One row per line item — repeat invoice-level fields across rows that share an invoice number.
+          </div>
+          <input type="file" accept=".csv" onchange="handleCsvUpload(event)" style="margin-bottom:10px;">
+          <button class="btn btn-small" onclick="loadSampleCsv()">Or load sample CSV data</button>
+        </div>
+        <div class="card">
+          <h3>Notes</h3>
+          <p style="font-size:12.5px;color:var(--text-secondary);line-height:1.5;margin:0;">
+            New invoices default to <strong>Unpaid</strong> status. Duplicate invoice numbers from
+            the same licensor will be flagged before saving in a production build — out of scope for this prototype.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function addLine(){ manualForm.lines.push({territory:"",plan:"",amount:""}); render(); }
+function removeLine(i){ manualForm.lines.splice(i,1); render(); }
+
+function submitManualInvoice(){
+  if(!manualForm.invoiceNumber || !manualForm.invoiceDate || manualForm.lines.some(l=>!l.territory||!l.plan||!l.amount)){
+    showToast("Please complete all fields before creating the invoice.");
+    return;
+  }
+  const inv = makeInvoice({
+    licensor: manualForm.licensor,
+    invoiceNumber: manualForm.invoiceNumber,
+    invoiceDate: manualForm.invoiceDate,
+    terms: manualForm.terms,
+    currency: manualForm.currency,
+    lines: manualForm.lines.map(l=>({territory:l.territory, plan:l.plan, amount:parseFloat(l.amount)})),
+  });
+  invoices.unshift(inv);
+  manualForm = { licensor: licensors[0], invoiceNumber:"", invoiceDate:"", terms:"Net 30", currency:"USD", lines:[{territory:"",plan:"",amount:""}] };
+  showToast(`Invoice ${inv.invoiceNumber} created.`);
+  state.view = "browser";
+}
+
+function handleCsvUpload(evt){
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => parseCsvAndCreate(e.target.result);
+  reader.readAsText(file);
+}
+function loadSampleCsv(){
+  const sample = `licensor,invoice_number,invoice_date,terms,currency,territory,plan,amount
+Solene Music Group,SMG-5502,2026-06-01,Net 30,EUR,DE,Family,7200
+Solene Music Group,SMG-5502,2026-06-01,Net 30,EUR,DE,Student,1800
+Solene Music Group,SMG-5502,2026-06-01,Net 30,EUR,IT,Individual,5100`;
+  parseCsvAndCreate(sample);
+}
+function parseCsvAndCreate(text){
+  const lines = text.trim().split("\n").map(l=>l.split(","));
+  const header = lines[0].map(h=>h.trim());
+  const rows = lines.slice(1).map(r=>{
+    const obj = {};
+    header.forEach((h,i)=> obj[h]= (r[i]||"").trim());
+    return obj;
+  });
+  const grouped = {};
+  rows.forEach(r=>{
+    const key = r.licensor+"::"+r.invoice_number;
+    if(!grouped[key]) grouped[key] = { ...r, lines: [] };
+    grouped[key].lines.push({ territory:r.territory, plan:r.plan, amount: parseFloat(r.amount) });
+  });
+  let created = 0;
+  Object.values(grouped).forEach(g=>{
+    invoices.unshift(makeInvoice({
+      licensor:g.licensor, invoiceNumber:g.invoice_number, invoiceDate:g.invoice_date,
+      terms:g.terms, currency:g.currency, lines:g.lines,
+    }));
+    created++;
+  });
+  showToast(`${created} invoice${created===1?'':'s'} created from CSV.`);
+  state.view = "browser";
+  render();
+}
+
+/* ---------------------------------------------------------------
+   MAIN RENDER
+--------------------------------------------------------------- */
+function render(){
+  document.querySelectorAll(".tab").forEach(t=>{
+    t.classList.toggle("active", t.dataset.view===state.view || (state.view==="detail" && t.dataset.view==="browser"));
+  });
+  let html = "";
+  if(state.view==="browser") html = renderBrowser();
+  else if(state.view==="detail") html = renderDetail();
+  else if(state.view==="payments") html = renderPayments();
+  else if(state.view==="upload") html = renderUpload();
+  document.getElementById("app").innerHTML = html;
+
+  const existingModal = document.querySelector(".modal-overlay");
+  if(existingModal) existingModal.remove();
+  if(state.confirmModal){
+    document.body.insertAdjacentHTML("beforeend", renderConfirmModal());
+  }
+  const existingToast = document.querySelector(".toast");
+  if(existingToast) existingToast.remove();
+  if(state.toast){
+    document.body.insertAdjacentHTML("beforeend", `<div class="toast">${esc(state.toast)}</div>`);
+  }
+}
+
+document.getElementById("tabs").addEventListener("click", e=>{
+  const btn = e.target.closest(".tab");
+  if(!btn) return;
+  state.view = btn.dataset.view;
+  if(state.view==="payments"){ state.paymentsQueue.focusInvoiceId = null; }
+  render();
+});
+
+render();
+</script>
+</body>
+</html>
