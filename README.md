@@ -2,12 +2,18 @@
 
 A UI prototype for an internal accounts-payable tool used by a music publishing operations team to manage licensor invoices — creation, territory/plan-level line items, and full or partial payment tracking.
 
-**Live demo:** _add your Vercel URL here after deploying_
 **Design rationale / PRD:** [docs/PRD.md](./docs/PRD.md)
 
-## The problem
+## The scenario
 
-Licensors send invoices covering one or more territories and service plans, and payments against those invoices are often made incrementally — one territory or plan settled now, another held for later. The tool needed to make outstanding balances, payment history, and per-invoice status legible at a glance, and support paying multiple invoices in a single batch action.
+Apple Music receives invoices from music rights holders (call them licensors) which must be paid fully or partially. These invoices may be multi territorial and may contain one or more plans of Apple Music Service. Examples of plans - Individual, Family, Student etc.
+
+## Task
+
+Design a UI prototype for an internal invoice and payment management tool used by the Apple Music Publishing Operations team. Your prototype should cover:
+- Creating and viewing invoices (with territory and plan details)
+- Recording full or partial payments against an invoice
+- Tracking outstanding balances and payment history per invoice.
 
 ## Key design decisions
 
@@ -15,7 +21,6 @@ Licensors send invoices covering one or more territories and service plans, and 
 - **Line items are paid in full only.** No partial-dollar payment within a single territory/plan line — simplifies both the data model and the payment UI (selection, not amount entry).
 - **Blocked is a manual, accountable override.** An ops user can block an invoice regardless of its payment state (e.g., a licensor dispute), and is required to enter a reason. It's independent of the computed status logic.
 - **Batch payments are a selection flow, not a form.** Since lines pay in full, processing a batch of payments is: filter outstanding line items across licensors/territories/plans, select the ones to pay, review a summary grouped by currency, confirm. Each line generates its own payment record, all sharing one batch ID.
-- **Visual direction follows Apple's own internal tooling language** — light surfaces, system font stack, muted status indicators, minimal chrome — rather than a generic dashboard template.
 
 ## Assumptions
 
@@ -29,7 +34,7 @@ Full assumptions and data model are in [docs/PRD.md](./docs/PRD.md).
 
 ## Stack
 
-Single-file HTML/CSS/vanilla JS — no build step, no dependencies. Deployed as a static site on Vercel.
+Single-file HTML/CSS/vanilla JS.
 
 ## Running locally
 
