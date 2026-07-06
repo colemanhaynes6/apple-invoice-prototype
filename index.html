@@ -273,6 +273,7 @@ const state = {
   confirmModal: null,
   blockModal: null,
   approvalModal: null,
+  rejectModal: null,
 };
 
 const licensors = [
@@ -340,6 +341,35 @@ let payments = [];
         batchId: "batch-"+inv.id,
       });
     });
+  });
+})();
+
+let activityLog = [];
+function fmtTimestamp(d){
+  const pad = n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function logActivity(invoiceId, action, admin, comment){
+  activityLog.push({ id: nextId(), invoiceId, timestamp: fmtTimestamp(new Date()), action, admin, comment: comment||"" });
+}
+// seed illustrative history so the log isn't empty on first load
+(function seedActivityLog(){
+  const idOf = num => invoices.find(i=>i.invoiceNumber===num).id;
+  [
+    { num:"ACME-0876", ts:"2026-02-15 09:12", action:"Payment approval requested", admin:"Coleman H.", comment:"Requested approval for 2 line items ($13,000)." },
+    { num:"ACME-0876", ts:"2026-02-15 14:47", action:"Payment approved", admin:"David E.", comment:"" },
+    { num:"TRS-2201", ts:"2026-06-01 11:03", action:"Payment approval requested", admin:"Pramit B.", comment:"Requested approval for 2 line items (£15,050)." },
+    { num:"TRS-2201", ts:"2026-06-01 16:20", action:"Payment approved", admin:"Abe M.", comment:"Confirmed with licensor, releasing full payment." },
+    { num:"CPH-3305", ts:"2026-05-20 10:00", action:"Payment approval requested", admin:"Coleman H.", comment:"Requesting approval on the FR/Individual line only." },
+    { num:"CPH-3305", ts:"2026-05-20 15:41", action:"Payment approved", admin:"David E.", comment:"" },
+    { num:"BCM-4090", ts:"2026-04-22 13:15", action:"Invoice blocked", admin:"Pramit B.", comment:"Licensor rights ownership under dispute — legal review requested." },
+    { num:"CCL-5512", ts:"2026-06-03 09:14", action:"Payment approval requested", admin:"Coleman H.", comment:"Requesting approval for the JP/Individual line." },
+    { num:"ST-1111", ts:"2026-05-25 08:30", action:"Payment approval requested", admin:"Abe M.", comment:"Requested approval for 2 line items (A$8,600)." },
+    { num:"ST-1111", ts:"2026-05-25 17:02", action:"Payment approved", admin:"Pramit B.", comment:"Both lines confirmed and released." },
+    { num:"IMP-7788", ts:"2026-05-28 12:00", action:"Payment approval requested", admin:"David E.", comment:"" },
+    { num:"IMP-7788", ts:"2026-05-28 12:45", action:"Payment rejected", admin:"Coleman H.", comment:"Amount doesn't match the licensor's remittance advice — please re-verify before resubmitting." },
+  ].forEach(e=>{
+    activityLog.push({ id: nextId(), invoiceId: idOf(e.num), timestamp: e.ts, action: e.action, admin: e.admin, comment: e.comment });
   });
 })();
 
@@ -517,6 +547,15 @@ function renderDetail(){
     </tr>`;
   }).join("");
 
+  const log = activityLog.filter(a=>a.invoiceId===inv.id).sort((a,b)=>b.timestamp.localeCompare(a.timestamp));
+  const logRows = log.map(a=>`
+    <tr>
+      <td class="mono">${esc(a.timestamp)}</td>
+      <td>${esc(a.action)}</td>
+      <td>${esc(a.admin)}</td>
+      <td>${esc(a.comment) || '—'}</td>
+    </tr>`).join("");
+
   const hasPending = inv.lineItems.some(li=>li.pendingApproval);
   const hasPayable = !inv.blocked && !hasPending && inv.lineItems.some(li=>!li.paid && !li.pendingApproval);
 
@@ -566,6 +605,17 @@ function renderDetail(){
             </table>
           </div>` : `<div class="empty">No payments recorded yet.</div>`}
         </div>
+
+        <div class="card">
+          <h3>Activity log</h3>
+          ${log.length ? `
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Timestamp</th><th>Action</th><th>Admin</th><th>Comment</th></tr></thead>
+              <tbody>${logRows}</tbody>
+            </table>
+          </div>` : `<div class="empty">No approval or blocking activity yet.</div>`}
+        </div>
       </div>
 
       <div>
@@ -586,7 +636,7 @@ function renderDetail(){
               Requested by <strong style="color:var(--text-primary);">${esc(inv.pendingRequestedBy)}</strong> on ${inv.pendingRequestedDate}
             </div>
             <button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="openApprovalModal('${inv.id}')">Approve Payment</button>
-            <button class="btn" style="width:100%;margin-bottom:10px;" onclick="rejectPayment('${inv.id}')">Reject Request</button>
+            <button class="btn" style="width:100%;margin-bottom:10px;" onclick="openRejectModal('${inv.id}')">Reject Request</button>
           ` : ''}
           ${!inv.blocked ? `<button class="btn" style="width:100%;" onclick="openBlockModal('${inv.id}')">Mark as Blocked</button>`
                           : `<button class="btn" style="width:100%;" onclick="removeBlock('${inv.id}')">Remove Block</button>`}
@@ -666,16 +716,17 @@ function renderLicensorDetail(){
 }
 
 function openBlockModal(id){
-  state.blockModal = { invoiceId: id, reason: "" };
+  state.blockModal = { invoiceId: id, reason: "", admin: PROCESSORS[0] };
   render();
 }
 
 function confirmBlock(){
-  const { invoiceId, reason } = state.blockModal;
+  const { invoiceId, reason, admin } = state.blockModal;
   if(!reason.trim()) return;
   const inv = invoices.find(i=>i.id===invoiceId);
   inv.blocked = true;
   inv.blockReason = reason.trim();
+  logActivity(inv.id, "Invoice blocked", admin, reason.trim());
   state.blockModal = null;
   showToast("Invoice blocked.");
   render();
@@ -824,7 +875,7 @@ function selectAllVisible(){
 }
 
 function openConfirm(){
-  state.confirmModal = { processor: PROCESSORS[0] };
+  state.confirmModal = { processor: PROCESSORS[0], comment: "" };
   render();
 }
 
@@ -851,6 +902,10 @@ function renderConfirmModal(){
           ${PROCESSORS.map(p=>`<option ${state.confirmModal.processor===p?"selected":""}>${esc(p)}</option>`).join("")}
         </select>
       </div>
+      <div class="field">
+        <label>Comment (optional)</label>
+        <input type="text" value="${esc(state.confirmModal.comment)}" oninput="state.confirmModal.comment=this.value" placeholder="e.g. Licensor confirmed remittance details">
+      </div>
       <div class="modal-actions">
         <button class="btn" onclick="state.confirmModal=null; render()">Cancel</button>
         <button class="btn btn-primary" onclick="submitForApproval()">Submit for Approval</button>
@@ -869,6 +924,12 @@ function renderBlockModal(){
       <h3>Block invoice</h3>
       <p>Blocking <strong>${esc(inv.invoiceNumber)}</strong> prevents its outstanding line items from being paid until the block is removed. A reason is required.</p>
       <div class="field">
+        <label>Blocked by</label>
+        <select onchange="state.blockModal.admin=this.value">
+          ${PROCESSORS.map(p=>`<option ${state.blockModal.admin===p?"selected":""}>${esc(p)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
         <label>Reason for blocking</label>
         <input type="text" value="${esc(reason)}"
           oninput="state.blockModal.reason=this.value; document.querySelector('.modal .btn-primary').disabled=!this.value.trim();"
@@ -884,21 +945,24 @@ function renderBlockModal(){
 
 function submitForApproval(){
   const requestedBy = state.confirmModal.processor;
+  const userComment = (state.confirmModal.comment||"").trim();
   const today = new Date().toISOString().slice(0,10);
   const selectedIds = state.paymentsQueue.selected;
   let count = 0;
   invoices.forEach(inv=>{
-    let affected = false;
+    let affectedCount = 0;
     inv.lineItems.forEach(li=>{
       if(selectedIds.has(li.id) && !li.paid && !li.pendingApproval){
         li.pendingApproval = true;
-        affected = true;
+        affectedCount++;
         count++;
       }
     });
-    if(affected){
+    if(affectedCount>0){
       inv.pendingRequestedBy = requestedBy;
       inv.pendingRequestedDate = today;
+      logActivity(inv.id, "Payment approval requested", requestedBy,
+        userComment || `Requested approval for ${affectedCount} line item${affectedCount===1?'':'s'}.`);
     }
   });
   state.confirmModal = null;
@@ -909,7 +973,7 @@ function submitForApproval(){
 }
 
 function openApprovalModal(invoiceId){
-  state.approvalModal = { invoiceId, approver: PROCESSORS[0] };
+  state.approvalModal = { invoiceId, approver: PROCESSORS[0], comment: "" };
   render();
 }
 
@@ -931,6 +995,10 @@ function renderApprovalModal(){
           ${PROCESSORS.map(p=>`<option ${state.approvalModal.approver===p?"selected":""}>${esc(p)}</option>`).join("")}
         </select>
       </div>
+      <div class="field">
+        <label>Comment (optional)</label>
+        <input type="text" value="${esc(state.approvalModal.comment)}" oninput="state.approvalModal.comment=this.value" placeholder="e.g. Confirmed with licensor">
+      </div>
       <div class="modal-actions">
         <button class="btn" onclick="state.approvalModal=null; render()">Cancel</button>
         <button class="btn btn-primary" onclick="confirmApproval()">Approve Payment</button>
@@ -940,7 +1008,7 @@ function renderApprovalModal(){
 }
 
 function confirmApproval(){
-  const { invoiceId, approver } = state.approvalModal;
+  const { invoiceId, approver, comment } = state.approvalModal;
   const inv = invoices.find(i=>i.id===invoiceId);
   const batchId = "batch-"+nextId();
   const today = new Date().toISOString().slice(0,10);
@@ -955,16 +1023,56 @@ function confirmApproval(){
   });
   inv.pendingRequestedBy = null;
   inv.pendingRequestedDate = null;
+  logActivity(inv.id, "Payment approved", approver, (comment||"").trim() || `Approved ${count} line item${count===1?'':'s'}.`);
   state.approvalModal = null;
   showToast(`${count} payment${count===1?'':'s'} approved.`);
   render();
 }
 
-function rejectPayment(invoiceId){
+function openRejectModal(invoiceId){
+  state.rejectModal = { invoiceId, admin: PROCESSORS[0], comment: "" };
+  render();
+}
+
+function renderRejectModal(){
+  if(!state.rejectModal) return "";
+  const inv = invoices.find(i=>i.id===state.rejectModal.invoiceId);
+  const pendingLines = inv.lineItems.filter(li=>li.pendingApproval);
+  const total = pendingLines.reduce((s,li)=>s+li.amount,0);
+  return `
+  <div class="modal-overlay">
+    <div class="modal">
+      <h3>Reject payment request</h3>
+      <p>You're about to reject <strong>${pendingLines.length}</strong> line item${pendingLines.length===1?'':'s'}
+      (${fmtMoney(total, inv.currency)}) on <strong>${esc(inv.invoiceNumber)}</strong>, requested by
+      <strong>${esc(inv.pendingRequestedBy)}</strong> on ${inv.pendingRequestedDate}. Those lines return to Unpaid.</p>
+      <div class="field">
+        <label>Rejected by</label>
+        <select onchange="state.rejectModal.admin=this.value">
+          ${PROCESSORS.map(p=>`<option ${state.rejectModal.admin===p?"selected":""}>${esc(p)}</option>`).join("")}
+        </select>
+      </div>
+      <div class="field">
+        <label>Reason (optional)</label>
+        <input type="text" value="${esc(state.rejectModal.comment)}" oninput="state.rejectModal.comment=this.value" placeholder="e.g. Amount doesn't match remittance advice">
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="state.rejectModal=null; render()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmReject()">Reject Request</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function confirmReject(){
+  const { invoiceId, admin, comment } = state.rejectModal;
   const inv = invoices.find(i=>i.id===invoiceId);
-  inv.lineItems.forEach(li=>{ if(li.pendingApproval) li.pendingApproval = false; });
+  let count = 0;
+  inv.lineItems.forEach(li=>{ if(li.pendingApproval){ li.pendingApproval = false; count++; } });
   inv.pendingRequestedBy = null;
   inv.pendingRequestedDate = null;
+  logActivity(inv.id, "Payment rejected", admin, (comment||"").trim() || `Rejected ${count} line item${count===1?'':'s'}.`);
+  state.rejectModal = null;
   showToast("Payment request rejected.");
   render();
 }
@@ -1166,6 +1274,9 @@ function render(){
   }
   if(state.approvalModal){
     document.body.insertAdjacentHTML("beforeend", renderApprovalModal());
+  }
+  if(state.rejectModal){
+    document.body.insertAdjacentHTML("beforeend", renderRejectModal());
   }
   const existingToast = document.querySelector(".toast");
   if(existingToast) existingToast.remove();
