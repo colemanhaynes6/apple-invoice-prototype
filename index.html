@@ -157,7 +157,12 @@
   .ig-due{flex:0 0 120px;font-size:12px;color:var(--text-secondary);}
   .ig-amount{flex:0 0 100px;text-align:right;font-size:13px;font-weight:600;}
   .invoice-group-body{border-top:1px solid var(--border-light);background:var(--bg);padding:2px 14px 6px 40px;}
-  .invoice-group-body table{background:transparent;}
+  .invoice-group-body table{background:transparent;table-layout:fixed;}
+  .invoice-group-body th:first-child, .invoice-group-body td:first-child{width:34px;}
+  .invoice-group-body th:nth-child(2), .invoice-group-body td:nth-child(2),
+  .invoice-group-body th:nth-child(3), .invoice-group-body td:nth-child(3){
+    width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
 
   /* Detail view */
   .back-link{font-size:13px;color:var(--accent);cursor:pointer;display:inline-flex;align-items:center;gap:4px;margin-bottom:16px;background:none;border:none;padding:0;}
@@ -226,7 +231,7 @@ const nextId = () => (idCounter++).toString();
 
 const CURRENCY_SYMBOLS = { USD:"$", GBP:"£", EUR:"€", JPY:"¥", CAD:"C$", AUD:"A$" };
 const TERMS_DAYS = { "Net 15":15, "Net 30":30, "Net 45":45, "Net 60":60 };
-const PROCESSORS = ["R. Chen", "M. Okafor", "T. Iverson"];
+const PROCESSORS = ["Coleman Haynes", "David Ewell", "Pramit Bagui", "Abe Mirrashidi"];
 
 const state = {
   view: "browser",
@@ -235,14 +240,17 @@ const state = {
   paymentsQueue: { selected:new Set(), expanded:new Set() },
   toast: null,
   confirmModal: null,
+  blockModal: null,
 };
 
 const licensors = [
-  "Cedarwood Music Publishing",
-  "Northbridge Rights Group",
-  "Solene Music Group",
-  "Ashgrove Sync & Songs",
-  "Kestrel Publishing Partners",
+  "ACME Rights Management",
+  "The Right Stuff, LLC",
+  "Coleman's Publishing House",
+  "Biscuit the Cat Music Holdings",
+  "Culver City Licensors",
+  "Spinal Tap, LLC",
+  "Indie Music Publishing",
 ];
 
 function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lines, blocked=false, paidLineIdx=[]}) {
@@ -264,18 +272,20 @@ function makeInvoice({licensor, invoiceNumber, invoiceDate, terms, currency, lin
 }
 
 let invoices = [
-  makeInvoice({licensor:"Cedarwood Music Publishing", invoiceNumber:"CW-10231", invoiceDate:"2026-05-02", terms:"Net 30", currency:"USD",
+  makeInvoice({licensor:"ACME Rights Management", invoiceNumber:"ACME-1001", invoiceDate:"2026-05-02", terms:"Net 30", currency:"USD",
     lines:[{territory:"US",plan:"Individual",amount:18400},{territory:"US",plan:"Family",amount:9200},{territory:"CA",plan:"Individual",amount:4100}]}),
-  makeInvoice({licensor:"Northbridge Rights Group", invoiceNumber:"NB-88123", invoiceDate:"2026-05-10", terms:"Net 45", currency:"GBP",
+  makeInvoice({licensor:"The Right Stuff, LLC", invoiceNumber:"TRS-2201", invoiceDate:"2026-05-10", terms:"Net 45", currency:"GBP",
     lines:[{territory:"UK",plan:"Individual",amount:12750},{territory:"UK",plan:"Student",amount:2300}], paidLineIdx:[0,1]}),
-  makeInvoice({licensor:"Solene Music Group", invoiceNumber:"SMG-4471", invoiceDate:"2026-05-14", terms:"Net 30", currency:"EUR",
+  makeInvoice({licensor:"Coleman's Publishing House", invoiceNumber:"CPH-3305", invoiceDate:"2026-05-14", terms:"Net 30", currency:"EUR",
     lines:[{territory:"FR",plan:"Individual",amount:15600},{territory:"FR",plan:"Family",amount:8900},{territory:"DE",plan:"Individual",amount:11200}], paidLineIdx:[0]}),
-  makeInvoice({licensor:"Ashgrove Sync & Songs", invoiceNumber:"ASS-7790", invoiceDate:"2026-04-20", terms:"Net 30", currency:"USD",
-    lines:[{territory:"US",plan:"Voice",amount:3400}], blocked:true}),
-  makeInvoice({licensor:"Kestrel Publishing Partners", invoiceNumber:"KPP-2209", invoiceDate:"2026-05-18", terms:"Net 60", currency:"JPY",
+  makeInvoice({licensor:"Biscuit the Cat Music Holdings", invoiceNumber:"BCM-4090", invoiceDate:"2026-04-20", terms:"Net 30", currency:"USD",
+    lines:[{territory:"US",plan:"Apple One",amount:3400}], blocked:true}),
+  makeInvoice({licensor:"Culver City Licensors", invoiceNumber:"CCL-5512", invoiceDate:"2026-05-18", terms:"Net 60", currency:"JPY",
     lines:[{territory:"JP",plan:"Individual",amount:820000},{territory:"JP",plan:"Family",amount:410000}]}),
-  makeInvoice({licensor:"Cedarwood Music Publishing", invoiceNumber:"CW-10255", invoiceDate:"2026-05-22", terms:"Net 30", currency:"USD",
+  makeInvoice({licensor:"Spinal Tap, LLC", invoiceNumber:"ST-1111", invoiceDate:"2026-05-22", terms:"Net 30", currency:"AUD",
     lines:[{territory:"AU",plan:"Individual",amount:6700},{territory:"AU",plan:"Student",amount:1900}], paidLineIdx:[0,1]}),
+  makeInvoice({licensor:"Indie Music Publishing", invoiceNumber:"IMP-7788", invoiceDate:"2026-05-25", terms:"Net 30", currency:"USD",
+    lines:[{territory:"US",plan:"Family",amount:5200},{territory:"CA",plan:"Student",amount:1300}]}),
 ];
 
 let payments = [];
@@ -482,27 +492,35 @@ function renderDetail(){
         <div class="card">
           <h3>Actions</h3>
           ${hasUnpaid ? `<button class="btn btn-primary" style="width:100%;margin-bottom:10px;" onclick="payThisInvoice('${inv.id}')">Pay this invoice</button>` : ''}
-          ${!inv.blocked ? `<button class="btn" style="width:100%;" onclick="toggleBlock('${inv.id}', true)">Mark as Blocked</button>`
-                          : `<button class="btn" style="width:100%;" onclick="toggleBlock('${inv.id}', false)">Remove Block</button>`}
+          ${!inv.blocked ? `<button class="btn" style="width:100%;" onclick="openBlockModal('${inv.id}')">Mark as Blocked</button>`
+                          : `<button class="btn" style="width:100%;" onclick="removeBlock('${inv.id}')">Remove Block</button>`}
         </div>
       </div>
     </div>
   `;
 }
 
-function toggleBlock(id, blocked){
+function openBlockModal(id){
+  state.blockModal = { invoiceId: id, reason: "" };
+  render();
+}
+
+function confirmBlock(){
+  const { invoiceId, reason } = state.blockModal;
+  if(!reason.trim()) return;
+  const inv = invoices.find(i=>i.id===invoiceId);
+  inv.blocked = true;
+  inv.blockReason = reason.trim();
+  state.blockModal = null;
+  showToast("Invoice blocked.");
+  render();
+}
+
+function removeBlock(id){
   const inv = invoices.find(i=>i.id===id);
-  if(blocked){
-    const reason = prompt("Reason for blocking this invoice (required):");
-    if(!reason) return;
-    inv.blocked = true;
-    inv.blockReason = reason;
-    showToast("Invoice blocked.");
-  } else {
-    inv.blocked = false;
-    inv.blockReason = null;
-    showToast("Block removed.");
-  }
+  inv.blocked = false;
+  inv.blockReason = null;
+  showToast("Block removed.");
   render();
 }
 
@@ -676,6 +694,29 @@ function renderConfirmModal(){
   </div>`;
 }
 
+function renderBlockModal(){
+  if(!state.blockModal) return "";
+  const inv = invoices.find(i=>i.id===state.blockModal.invoiceId);
+  const reason = state.blockModal.reason;
+  return `
+  <div class="modal-overlay">
+    <div class="modal">
+      <h3>Block invoice</h3>
+      <p>Blocking <strong>${esc(inv.invoiceNumber)}</strong> prevents its outstanding line items from being paid until the block is removed. A reason is required.</p>
+      <div class="field">
+        <label>Reason for blocking</label>
+        <input type="text" value="${esc(reason)}"
+          oninput="state.blockModal.reason=this.value; document.querySelector('.modal .btn-primary').disabled=!this.value.trim();"
+          placeholder="e.g. Rights dispute pending legal review" autofocus>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="state.blockModal=null; render()">Cancel</button>
+        <button class="btn btn-primary" ${reason.trim()?'':'disabled'} onclick="confirmBlock()">Block Invoice</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 function processPayment(){
   const processor = state.confirmModal.processor;
   const batchId = "batch-"+nextId();
@@ -833,9 +874,9 @@ function handleCsvUpload(evt){
 }
 function loadSampleCsv(){
   const sample = `licensor,invoice_number,invoice_date,terms,currency,territory,plan,amount
-Solene Music Group,SMG-5502,2026-06-01,Net 30,EUR,DE,Family,7200
-Solene Music Group,SMG-5502,2026-06-01,Net 30,EUR,DE,Student,1800
-Solene Music Group,SMG-5502,2026-06-01,Net 30,EUR,IT,Individual,5100`;
+Coleman's Publishing House,CPH-3390,2026-06-01,Net 30,EUR,DE,Family,7200
+Coleman's Publishing House,CPH-3390,2026-06-01,Net 30,EUR,DE,Student,1800
+Coleman's Publishing House,CPH-3390,2026-06-01,Net 30,EUR,IT,Individual,5100`;
   parseCsvAndCreate(sample);
 }
 function parseCsvAndCreate(text){
@@ -888,6 +929,9 @@ function render(){
   if(existingModal) existingModal.remove();
   if(state.confirmModal){
     document.body.insertAdjacentHTML("beforeend", renderConfirmModal());
+  }
+  if(state.blockModal){
+    document.body.insertAdjacentHTML("beforeend", renderBlockModal());
   }
   const existingToast = document.querySelector(".toast");
   if(existingToast) existingToast.remove();
