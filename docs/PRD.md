@@ -64,12 +64,12 @@ An internal accounts payable tool for the Apple Music Publishing Operations team
 ### 4.1 Invoice Upload & Creation
 - Two paths: **CSV upload** (bulk) or **web form** (single invoice, manual entry).
 - Manual form: licensor (searchable dropdown, or "add new licensor"), invoice number, invoice date, payment terms, currency, then a repeatable line-item block (territory, plan type, amount). Total auto-calculates from line items.
-- CSV upload: template with columns for licensor, invoice number, date, terms, currency, territory, plan, amount (one row per line item, invoice-level fields repeated). Show a preview/validation step before committing — flag missing licensors, malformed rows, currency mismatches.
+- CSV upload: template with columns for licensor, invoice number, date, terms, currency, territory, plan, amount (one row per line item, invoice-level fields repeated).
 - On save: status initializes to Unpaid.
 
 ### 4.2 Invoice Browser
 - Scrollable table: Invoice #, Licensor, Invoice Date, Due Date (derived from terms), Total Amount, Status, Outstanding Balance.
-- Filters: status, licensor, territory, plan type, date range.
+- Filters: status, licensor, invoice date range.
 - Search: invoice number, licensor name.
 - Status shown as a colored badge (Unpaid / Partially Paid / Paid / Blocked).
 - Row click → Invoice Detail View.
@@ -80,14 +80,6 @@ An internal accounts payable tool for the Apple Music Publishing Operations team
 - Payment history table: payment date, amount, line item paid, processor, batch ID (if applicable) — append-only, chronological.
 - Outstanding balance: total − sum(payments), shown prominently.
 - Actions: "Pay this invoice" (jumps into the batch payment flow pre-filtered to this invoice's unpaid lines), "Mark as Blocked" (manual toggle with a required reason note).
-
-### 4.4 Invoice Payments (Batch Payment Run)
-- A queue/selection view: filterable list of all outstanding (unpaid) line items across invoices — by licensor, territory, plan, due date.
-- Ops user checks the line items to pay (can span multiple invoices/licensors).
-- Since lines are full-or-nothing, each checked line pays its full amount — no amount entry needed, just selection.
-- Review step: summary of total $ amount, count of line items, count of invoices affected, grouped by currency.
-- Submit → creates one Payment record per line item, all sharing a single batch_id, payment_date = today, processor = current user.
-- After submission: affected invoices' statuses recompute automatically.
 
 ## 5. Status Logic
 
@@ -108,7 +100,7 @@ Invoice status is computed from its line items, except Blocked which is a manual
 
 ## 7. Visual Design Direction
 
-Apple internal tooling aesthetic: light background, generous whitespace, SF Pro (or system default sans-serif as a stand-in), minimal chrome, data presented in clean tables with subtle borders rather than heavy grid lines, understated status badges (muted color fills, not saturated red/green alarm colors), left-nav or top-nav simple wayfinding between the four screens.
+Apple internal tooling aesthetic: light background, generous whitespace, SF Pro (or system default sans-serif as a stand-in), minimal chrome, data presented in clean tables with subtle borders rather than heavy grid lines, understated status badges (muted color fills, not saturated red/green alarm colors), left-nav or top-nav simple wayfinding between screens.
 
 ## 8. Out of Scope (this exercise)
 
