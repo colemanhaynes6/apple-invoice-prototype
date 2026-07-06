@@ -35,11 +35,3 @@ Full assumptions and data model are in [docs/PRD.md](./docs/PRD.md).
 ## Stack
 
 Single-file HTML/CSS/vanilla JS.
-
-## Running locally
-
-Just open `index.html` in a browser, or serve the directory with any static file server:
-
-```bash
-npx serve .
-```
