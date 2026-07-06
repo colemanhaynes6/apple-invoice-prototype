@@ -260,7 +260,7 @@ const nextId = () => (idCounter++).toString();
 
 const CURRENCY_SYMBOLS = { USD:"$", GBP:"£", EUR:"€", JPY:"¥", CAD:"C$", AUD:"A$" };
 const TERMS_DAYS = { "Net 15":15, "Net 30":30, "Net 45":45, "Net 60":60 };
-const PROCESSORS = ["Coleman Haynes", "David Ewell", "Pramit Bagui", "Abe Mirrashidi"];
+const PROCESSORS = ["Coleman H.", "David E.", "Pramit B.", "Abe M."];
 
 const state = {
   view: "browser",
@@ -274,13 +274,13 @@ const state = {
 };
 
 const licensors = [
-  { name:"ACME Rights Management", poc:"Jordan Alvarez", contractRef:"CTR-ACME-2024-01" },
-  { name:"The Right Stuff, LLC", poc:"Morgan Lee", contractRef:"CTR-TRS-2023-14" },
-  { name:"Coleman's Publishing House", poc:"Sam Rivera", contractRef:"CTR-CPH-2024-02" },
-  { name:"Biscuit the Cat Music Holdings", poc:"Taylor Kim", contractRef:"CTR-BCM-2022-07" },
-  { name:"Culver City Licensors", poc:"Casey Nguyen", contractRef:"CTR-CCL-2024-03" },
-  { name:"Spinal Tap, LLC", poc:"Jamie Ellsworth", contractRef:"CTR-ST-2021-11" },
-  { name:"Indie Music Publishing", poc:"Robin Chen", contractRef:"CTR-IMP-2024-05" },
+  { name:"ACME Rights Management", poc:"Jordan A.", contractRef:"CTR-ACME-2024-01" },
+  { name:"The Right Stuff, LLC", poc:"Morgan L.", contractRef:"CTR-TRS-2023-14" },
+  { name:"Coleman's Publishing House", poc:"Sam R.", contractRef:"CTR-CPH-2024-02" },
+  { name:"Biscuit the Cat Music Holdings", poc:"Taylor K.", contractRef:"CTR-BCM-2022-07" },
+  { name:"Culver City Licensors", poc:"Casey N.", contractRef:"CTR-CCL-2024-03" },
+  { name:"Spinal Tap, LLC", poc:"Jamie E.", contractRef:"CTR-ST-2021-11" },
+  { name:"Indie Music Publishing", poc:"Robin C.", contractRef:"CTR-IMP-2024-05" },
 ];
 const licensorNames = licensors.map(l=>l.name);
 function findLicensor(name){ return licensors.find(l=>l.name===name); }
