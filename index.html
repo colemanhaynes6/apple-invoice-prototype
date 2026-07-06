@@ -135,8 +135,32 @@
   .pill-blocked{background:var(--danger-bg);color:var(--danger-text);}
 
   .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
-  .toolbar select, .toolbar input{width:auto;min-width:140px;}
+  .toolbar select, .toolbar input:not(.checkbox){width:auto;min-width:140px;}
   .toolbar .search{flex:1;min-width:200px;}
+
+  /* Multi-select filter dropdown */
+  .ms-dropdown{position:relative;}
+  .ms-trigger{
+    appearance:none;-webkit-appearance:none;border:1px solid var(--border);background:#fff;
+    height:33px;box-sizing:border-box;padding:8px 26px 8px 10px;border-radius:7px;min-width:140px;
+    font-size:13px;font-family:inherit;color:var(--text-primary);cursor:pointer;
+    text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='%236e6e73' d='M4 6l4 4 4-4z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 8px center;
+  }
+  .ms-trigger.active{border-color:var(--accent);color:var(--accent);background-color:var(--accent-bg);}
+  .ms-panel{
+    position:absolute;top:calc(100% + 4px);left:0;z-index:20;min-width:210px;max-height:280px;overflow-y:auto;
+    background:var(--surface);border:1px solid var(--border-light);border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12);padding:6px;
+  }
+  .ms-panel-right{left:auto;right:0;}
+  .ms-panel-header{
+    display:flex;align-items:center;justify-content:space-between;padding:4px 8px 6px;
+    font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.03em;
+  }
+  .ms-option{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:13px;cursor:pointer;white-space:nowrap;}
+  .ms-option:hover{background:var(--neutral-bg);}
 
   .empty{text-align:center;color:var(--text-secondary);font-size:13px;padding:40px 0;}
 
@@ -236,7 +260,7 @@ const PROCESSORS = ["Coleman Haynes", "David Ewell", "Pramit Bagui", "Abe Mirras
 const state = {
   view: "browser",
   selectedInvoiceId: null,
-  browser: { status:"all", licensor:"all", search:"" },
+  browser: { statusFilter:[], licensorFilter:[], search:"", openMenu:null },
   paymentsQueue: { selected:new Set(), expanded:new Set() },
   toast: null,
   confirmModal: null,
@@ -337,11 +361,56 @@ function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;
 /* ---------------------------------------------------------------
    RENDER: BROWSER
 --------------------------------------------------------------- */
+const STATUSES = ["Unpaid", "Partially Paid", "Paid", "Blocked"];
+
+function renderMultiSelect(key, label, options, alignRight){
+  const f = state.browser;
+  const selected = f[key];
+  const buttonLabel = selected.length===0 ? label
+    : selected.length===1 ? selected[0]
+    : `${selected.length} selected`;
+  const optionsHtml = options.map(opt=>`
+    <label class="ms-option">
+      <input type="checkbox" class="checkbox" ${selected.includes(opt)?"checked":""} onchange="toggleFilterOption('${key}','${esc(opt)}')">
+      <span>${esc(opt)}</span>
+    </label>`).join("");
+
+  return `
+    <div class="ms-dropdown">
+      <button type="button" class="ms-trigger ${selected.length?'active':''}" onclick="event.stopPropagation(); toggleFilterMenu('${key}')">
+        <span>${esc(buttonLabel)}</span>
+      </button>
+      ${state.browser.openMenu===key ? `
+      <div class="ms-panel ${alignRight?'ms-panel-right':''}" onclick="event.stopPropagation()">
+        <div class="ms-panel-header">
+          <span>${esc(label)}</span>
+          ${selected.length ? `<button type="button" class="btn-text" onclick="clearFilter('${key}')">Clear</button>` : ''}
+        </div>
+        ${optionsHtml}
+      </div>` : ''}
+    </div>`;
+}
+
+function toggleFilterMenu(key){
+  state.browser.openMenu = state.browser.openMenu===key ? null : key;
+  render();
+}
+function toggleFilterOption(key, value){
+  const arr = state.browser[key];
+  const i = arr.indexOf(value);
+  i>=0 ? arr.splice(i,1) : arr.push(value);
+  render();
+}
+function clearFilter(key){
+  state.browser[key] = [];
+  render();
+}
+
 function renderBrowser(){
   const f = state.browser;
   const filtered = invoices.filter(inv=>{
-    if(f.status!=="all" && invoiceStatus(inv)!==f.status) return false;
-    if(f.licensor!=="all" && inv.licensor!==f.licensor) return false;
+    if(f.statusFilter.length && !f.statusFilter.includes(invoiceStatus(inv))) return false;
+    if(f.licensorFilter.length && !f.licensorFilter.includes(inv.licensor)) return false;
     if(f.search){
       const s = f.search.toLowerCase();
       if(!inv.invoiceNumber.toLowerCase().includes(s) && !inv.licensor.toLowerCase().includes(s)) return false;
@@ -362,8 +431,6 @@ function renderBrowser(){
     </tr>`;
   }).join("");
 
-  const licensorOptions = licensors.map(l=>`<option ${f.licensor===l?"selected":""}>${esc(l)}</option>`).join("");
-
   return `
     <div class="page-header">
       <div>
@@ -375,17 +442,8 @@ function renderBrowser(){
       <div class="toolbar">
         <input class="search" type="text" placeholder="Search invoice # or licensor" value="${esc(f.search)}"
           oninput="state.browser.search=this.value; render()">
-        <select onchange="state.browser.status=this.value; render()">
-          <option value="all" ${f.status==="all"?"selected":""}>All statuses</option>
-          <option ${f.status==="Unpaid"?"selected":""}>Unpaid</option>
-          <option value="Partially Paid" ${f.status==="Partially Paid"?"selected":""}>Partially Paid</option>
-          <option ${f.status==="Paid"?"selected":""}>Paid</option>
-          <option ${f.status==="Blocked"?"selected":""}>Blocked</option>
-        </select>
-        <select onchange="state.browser.licensor=this.value; render()">
-          <option value="all">All licensors</option>
-          ${licensorOptions}
-        </select>
+        ${renderMultiSelect("statusFilter", "All statuses", STATUSES)}
+        ${renderMultiSelect("licensorFilter", "All licensors", licensors, true)}
       </div>
       <div class="table-scroll">
         <table>
@@ -946,6 +1004,10 @@ document.getElementById("tabs").addEventListener("click", e=>{
   state.view = btn.dataset.view;
   if(state.view==="payments"){ state.paymentsQueue.focusInvoiceId = null; }
   render();
+});
+
+document.addEventListener("click", ()=>{
+  if(state.browser.openMenu){ state.browser.openMenu = null; render(); }
 });
 
 render();
